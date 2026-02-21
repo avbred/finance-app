@@ -605,7 +605,22 @@ function initGoogleAuth() {
 }
 
 function signIn() {
-  if (!tokenClient) { showToast('⚠️ Google API не загружен'); return; }
+  if (!tokenClient) {
+    // GSI not loaded yet — wait up to 5 seconds
+    showToast('⏳ Подключение...');
+    let attempts = 0;
+    const wait = setInterval(() => {
+      attempts++;
+      if (tokenClient) {
+        clearInterval(wait);
+        tokenClient.requestAccessToken({ prompt: 'consent' });
+      } else if (attempts > 25) {
+        clearInterval(wait);
+        showToast('❌ Google API недоступен. Проверь интернет и обнови страницу.');
+      }
+    }, 200);
+    return;
+  }
   tokenClient.requestAccessToken({ prompt: 'consent' });
 }
 
