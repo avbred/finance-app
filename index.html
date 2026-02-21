@@ -763,19 +763,25 @@ async function syncFromSheets() {
         const bpNames = new Set(bps.map(bp => bp.name));
         let changed = false;
 
-        // Remove unpaid expenses that are no longer in base payments
-        // (only remove if they were a base payment — i.e. same name exists in BP list for this day)
-        // We track which names were ever base payments by checking if they match any BP name
-        const before = p.expenses.length;
+        // Remove unpaid expenses that are NOT in the current BP list for this day's period
+        // Logic: if an expense is unpaid AND its name doesn't match any current BP for this day
+        // AND it doesn't look like a manually-added expense (i.e. it WAS a BP before)
+        // We identify "was a BP" by checking against ALL base payments (any day),
+        // since we want to remove only things that were auto-added by BP sync
+        const allBPNames = new Set(state.basePayments.map(bp => bp.name));
         p.expenses = p.expenses.filter(e => {
-          // Keep if: paid, OR not a base payment name at all
-          // Remove if: unpaid AND was in BP list but is no longer there
-          const wasBasePay = state.basePayments.some(bp => bp.name === e.name) ||
-                             bpNames.has(e.name);
-          if (!e.paid && wasBasePay && !bpNames.has(e.name)) {
-            changed = true;
-            return false; // remove
+          // Keep paid expenses always
+          if (e.paid) return true;
+          // Keep if name is in current day's BP list
+          if (bpNames.has(e.name)) return true;
+          // Remove if name was in ANY BP list (it was auto-added) but no longer in this day's list
+          if (allBPNames.has(e.name)) {
+            // It exists as a BP for a different day — keep it only if day matches
+            const bpForThisDay = bps.some(bp => bp.name === e.name);
+            if (!bpForThisDay) { changed = true; return false; }
           }
+          // If name not in any BP at all — it was manually added, keep it
+          if (!allBPNames.has(e.name)) return true;
           return true;
         });
 
