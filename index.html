@@ -313,12 +313,6 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--ink);mi
     <div class="topbar-title">Настройки ⚙️</div>
   </div>
 
-  <!-- Google Sheets -->
-  <div class="set-section">
-    <div class="set-section-title">Google Sheets</div>
-    <div class="set-card" id="auth-card-content"></div>
-  </div>
-
   <!-- Базовые платежи -->
   <div class="set-section">
     <div class="set-section-title">Базовые платежи</div>
@@ -569,6 +563,19 @@ function initGoogleAuth() {
       callback: async (resp) => {
         if (resp.error) { setSyncStatus('error','ошибка'); showToast('❌ Ошибка авторизации'); return; }
         gAccessToken = resp.access_token;
+        // Save email for silent refresh on next load
+        if (resp.access_token) {
+          // Fetch user info to get email
+          fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+            headers: { Authorization: `Bearer ${gAccessToken}` }
+          }).then(r=>r.json()).then(info => {
+            if (info.email) {
+              gUserEmail = info.email;
+              localStorage.setItem('gauth_v2', JSON.stringify({ email: info.email }));
+              renderAuthCard();
+            }
+          }).catch(()=>{});
+        }
         setSyncStatus('syncing','синхронизация...');
         try {
           await initSheets();
@@ -587,7 +594,14 @@ function initGoogleAuth() {
     // Auto-try silent token refresh if we had email before
     if (gUserEmail) {
       setSyncStatus('syncing','восстановление...');
-      tokenClient.requestAccessToken({ prompt: '' });
+      // Use 'select_account' only if no email, otherwise skip account chooser
+      tokenClient.requestAccessToken({ prompt: 'none', login_hint: gUserEmail,
+        error_callback: () => {
+          // Silent failed — need user interaction, show badge as offline
+          setSyncStatus('offline','офлайн');
+          renderAuthCard();
+        }
+      });
     }
   }, 200);
 }
@@ -739,18 +753,22 @@ async function syncFromSheets() {
     }
 
     if (periods.length > 0) {
-      // Auto-populate base payments for periods with no expenses yet,
-      // then write those rows back to the sheet
+      // For each period: add any base payments that are missing
+      // (either period has no expenses yet, or new BP was added since last sync)
       const rowsToWrite = [];
       periods.forEach((p, idx) => {
-        if (p.expenses.length === 0) {
-          const day = parseInt(p.name.match(/\d+$/)?.[0]) || 0;
-          const bps = state.basePayments.filter(bp => bp.day === day);
-          if (bps.length > 0) {
-            p.expenses = bps.map(bp => ({ name: bp.name, amount: bp.amount, paid: false }));
-            rowsToWrite.push(idx);
+        const day = parseInt(p.name.match(/\d+$/)?.[0]) || 0;
+        const bps = state.basePayments.filter(bp => bp.day === day);
+        let changed = false;
+        bps.forEach(bp => {
+          // Check if this base payment already exists in the period (by name)
+          const exists = p.expenses.some(e => e.name === bp.name);
+          if (!exists) {
+            p.expenses.push({ name: bp.name, amount: bp.amount, paid: false });
+            changed = true;
           }
-        }
+        });
+        if (changed) rowsToWrite.push(idx);
       });
 
       state.periods = periods;
