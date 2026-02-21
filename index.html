@@ -676,27 +676,11 @@ async function initSheets() {
   const meta = await metaResp.json();
   const existingSheets = meta.sheets?.map(s => s.properties.title) || [];
 
-  // Write headers if sheets are empty
-  const needed = [
-    { name: SH_PERIODS, header: null }, // no fixed header, data starts at row 1
-    { name: SH_KOPILKA, header: [['id','тип','название','сумма','оплачено','isCredit','балансПосле']] },
-    { name: SH_BP,      header: [['название','сумма','день']] },
-  ];
-
-  for (const s of needed) {
-    if (!existingSheets.includes(s.name)) {
-      throw new Error(`Лист "${s.name}" не найден. Создай его в таблице.`);
-    }
-    if (s.header) {
-      // Check if header row exists
-      try {
-        const r = await sheetsRequest('GET', `${s.name}!A1:G1`);
-        if (!r.values || !r.values[0] || r.values[0][0] !== s.header[0][0]) {
-          await sheetsRequest('PUT', `${s.name}!A1`, { range:`${s.name}!A1`, majorDimension:'ROWS', values: s.header });
-        }
-      } catch(e) {
-        await sheetsRequest('PUT', `${s.name}!A1`, { range:`${s.name}!A1`, majorDimension:'ROWS', values: s.header });
-      }
+  // Just verify sheets exist, no headers needed
+  const needed = [SH_PERIODS, SH_KOPILKA, SH_BP];
+  for (const name of needed) {
+    if (!existingSheets.includes(name)) {
+      throw new Error(`Лист "${name}" не найден. Создай его в таблице.`);
     }
   }
 
@@ -847,10 +831,9 @@ async function writeKopilkaToSheets() {
 }
 
 async function writeBPToSheets() {
-  const header = [['название','сумма','день']];
   const rows = state.basePayments.map(bp => [bp.name, bp.amount, bp.day]);
   await sheetsRequest('CLEAR', `${SH_BP}!A1:C100`);
-  await sheetsRequest('PUT', `${SH_BP}!A1`, { range:`${SH_BP}!A1`, majorDimension:'ROWS', values: [...header, ...rows] });
+  await sheetsRequest('PUT', `${SH_BP}!A1`, { range:`${SH_BP}!A1`, majorDimension:'ROWS', values: rows });
 }
 
 // ─── Write period row: only income + manual expenses (base payments NOT stored in Периоды) ──
@@ -1052,7 +1035,11 @@ function deleteExp(i){
   if(!confirm('Удалить расход?'))return;
   state.periods[state.currentIdx].expenses.splice(i,1);
   saveState();renderPeriod();showToast('🗑️ Удалено');
-  scheduleSync(()=>writePeriodRow(state.currentIdx));
+  // Write immediately (no debounce) so deletion is reflected in table right away
+  if(gAccessToken){
+    setSyncStatus('syncing','сохранение...');
+    writePeriodRow(state.currentIdx).then(()=>setSyncStatus('connected','синхронизировано')).catch(()=>setSyncStatus('error','ошибка записи'));
+  }
 }
 
 function openAddExpense(){
