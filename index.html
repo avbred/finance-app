@@ -863,6 +863,8 @@ async function writePeriodRow(periodIdx) {
   p.expenses.filter(e => e.manual).forEach(e => {
     row.push(e.name, e.amount, e.paid ? 'TRUE' : 'FALSE');
   });
+  // First clear the entire row (up to col ZZ), then write fresh data
+  await sheetsRequest('CLEAR', `${SH_PERIODS}!A${sheetRow}:ZZ${sheetRow}`);
   await sheetsRequest('PUT', `${SH_PERIODS}!A${sheetRow}`, {
     range: `${SH_PERIODS}!A${sheetRow}`,
     majorDimension: 'ROWS',
