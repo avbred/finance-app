@@ -606,7 +606,6 @@ function initGoogleAuth() {
 
 function signIn() {
   if (!tokenClient) {
-    // GSI not loaded yet — wait up to 5 seconds
     showToast('⏳ Подключение...');
     let attempts = 0;
     const wait = setInterval(() => {
@@ -616,7 +615,7 @@ function signIn() {
         tokenClient.requestAccessToken({ prompt: 'consent' });
       } else if (attempts > 25) {
         clearInterval(wait);
-        showToast('❌ Google API недоступен. Проверь интернет и обнови страницу.');
+        showToast('❌ Попробуй открыть в режиме инкогнито (расширения могут блокировать)');
       }
     }, 200);
     return;
@@ -954,6 +953,20 @@ function changePeriod(dir){
 }
 
 function renderPeriod(){
+  if(!state.periods.length){
+    document.getElementById('period-name').textContent='—';
+    document.getElementById('hero-income').textContent='0 ₽';
+    document.getElementById('hero-exp').textContent='0 ₽';
+    document.getElementById('hero-paid').textContent='0 ₽';
+    const le=document.getElementById('hero-left');le.textContent='0 ₽';le.className='hero-stat-val yellow';
+    document.getElementById('prog-pct').textContent='0%';
+    document.getElementById('prog-fill').style.width='0%';
+    document.getElementById('btn-prev').disabled=true;
+    document.getElementById('btn-next').disabled=true;
+    document.getElementById('mk-val').textContent=fmt(state.kopilka.balance);
+    document.getElementById('exp-list').innerHTML='<div class="empty-state"><div class="empty-ico">🔄</div><div class="empty-txt">Войди через Google<br>чтобы загрузить периоды</div></div>';
+    return;
+  }
   const p=state.periods[state.currentIdx];
   document.getElementById('period-name').textContent=p.name;
   document.getElementById('hero-income').textContent=fmt(p.income);
