@@ -217,7 +217,7 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--ink);mi
 .modal-btn.secondary{background:var(--cream);color:var(--ink)}
 
 /* TOAST */
-.toast{position:fixed;bottom:calc(var(--nav) + 14px);left:50%;transform:translateX(-50%) translateY(80px);background:var(--ink);color:white;padding:11px 20px;border-radius:100px;font-size:13px;font-weight:700;z-index:300;transition:transform .3s ease;white-space:nowrap;pointer-events:none}
+.toast{position:fixed;bottom:calc(var(--nav) + 20px);left:50%;transform:translateX(-50%) translateY(100px);background:var(--ink);color:white;padding:11px 20px;border-radius:100px;font-size:13px;font-weight:700;z-index:400;transition:transform .3s ease;white-space:nowrap;pointer-events:none;max-width:calc(100% - 48px);text-align:center}
 .toast.show{transform:translateX(-50%) translateY(0)}
 .empty-state{text-align:center;padding:32px 24px;color:var(--ink-muted)}
 .empty-ico{font-size:40px;margin-bottom:10px}
@@ -317,19 +317,6 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--ink);mi
   <div class="set-section">
     <div class="set-section-title">Google Sheets</div>
     <div class="set-card" id="auth-card-content"></div>
-  </div>
-
-  <!-- Зарплата -->
-  <div class="set-section">
-    <div class="set-section-title">Зарплата</div>
-    <div class="set-card">
-      <div class="set-row">
-        <div><div class="set-row-lbl">Оклад</div><div class="set-row-sub">Базовая сумма в месяц</div></div>
-        <input class="set-input" id="salary-input" type="number" placeholder="150000">
-      </div>
-      <div class="sal-preview" id="sal-preview"></div>
-      <button class="set-save-btn" onclick="saveSalary()">Сохранить оклад</button>
-    </div>
   </div>
 
   <!-- Базовые платежи -->
@@ -587,7 +574,7 @@ function initGoogleAuth() {
           await initSheets();
           await syncFromSheets();
           setSyncStatus('connected','синхронизировано');
-          showToast('✅ Подключено к Google Sheets!');
+          showToast('✅ Google Sheets подключён', 2000);
         } catch(e) {
           setSyncStatus('error','ошибка');
           showToast('❌ ' + (e.message || 'Ошибка синхронизации'));
@@ -713,9 +700,21 @@ async function initSheets() {
 async function syncFromSheets() {
   setSyncStatus('syncing','чтение...');
 
+  // --- BASE PAYMENTS first (needed for auto-populate) ---
+  const bpResp = await sheetsRequest('GET', `${SH_BP}!A1:C100`);
+  const bpRows = bpResp.values || [];
+  if (bpRows.length > 0) {
+    const bps = bpRows.filter(r=>r[0]).map((r,i)=>({
+      id:'bp_'+i, name:r[0]||'',
+      amount:parseFloat(String(r[1]||'').replace(/\s/g,''))||0,
+      day:parseInt(r[2])||5,
+    }));
+    if (bps.length > 0) state.basePayments = bps;
+  } else {
+    await writeBPToSheets();
+  }
+
   // --- PERIODS ---
-  // Table is source of truth. App only reads periods, never overwrites them.
-  // Only paid status is written back by the app.
   const perResp = await sheetsRequest('GET', `${SH_PERIODS}!A1:ZZ500`);
   const perRows = perResp.values || [];
 
@@ -724,32 +723,40 @@ async function syncFromSheets() {
     const periods = [];
 
     for (const row of perRows) {
-      if (!row[0] || !row[1]) continue; // need at least name + income
+      if (!row[0] || !row[1]) continue;
       const name   = row[0].trim();
       const income = parseFloat(String(row[1]).replace(/\s/g,'')) || 0;
       const expenses = [];
-
-      // expenses: triplets starting at col C (index 2): name, amount, paid
       for (let c = 2; c + 1 < row.length; c += 3) {
         const expName = (row[c] || '').trim();
         const expAmt  = parseFloat(String(row[c+1] || '').replace(/\s/g,''));
         const expPaid = (row[c+2] || '').toString().toUpperCase() === 'TRUE';
-        if (expName && !isNaN(expAmt) && expAmt > 0) {
+        if (expName && !isNaN(expAmt) && expAmt > 0)
           expenses.push({ name: expName, amount: expAmt, paid: expPaid });
-        }
       }
       periods.push({ name, income, expenses });
     }
 
     if (periods.length > 0) {
+      // Auto-populate base payments for periods with no expenses yet,
+      // then write those rows back to the sheet
+      const rowsToWrite = [];
+      periods.forEach((p, idx) => {
+        if (p.expenses.length === 0) {
+          const day = parseInt(p.name.match(/\d+$/)?.[0]) || 0;
+          const bps = state.basePayments.filter(bp => bp.day === day);
+          if (bps.length > 0) {
+            p.expenses = bps.map(bp => ({ name: bp.name, amount: bp.amount, paid: false }));
+            rowsToWrite.push(idx);
+          }
+        }
+      });
+
       state.periods = periods;
-      // Try to keep same period selected
       const newIdx = periods.findIndex(p => p.name === curName);
-      // If current period not found, pick the most recent past/current period
       if (newIdx >= 0) {
         state.currentIdx = newIdx;
       } else {
-        // Find last period that has already arrived
         let best = 0;
         for (let i = 0; i < periods.length; i++) {
           const pd = getPeriodDate(periods[i].name);
@@ -758,50 +765,31 @@ async function syncFromSheets() {
         }
         state.currentIdx = best;
       }
+
+      // Write auto-populated rows back so table has full data
+      for (const idx of rowsToWrite) {
+        await writePeriodRow(idx);
+      }
     }
   }
-  // If sheet is empty — leave state.periods as-is (local data), don't overwrite sheet
 
   // --- KOPILKA ---
   const kopResp = await sheetsRequest('GET', `${SH_KOPILKA}!A1:G500`);
   const kopRows = kopResp.values || [];
   if (kopRows.length > 0) {
-    const timeline = kopRows
-      .filter(r => r[0] && r[2]) // has id and name
-      .map(r => ({
-        id:       r[0] || '',
-        type:     r[1] || 'income',
-        name:     r[2] || '',
-        amount:   parseFloat(String(r[3] || '').replace(/\s/g,'')) || 0,
-        paid:     (r[4] || '').toString().toUpperCase() === 'TRUE',
-        isCredit: (r[5] || '').toString().toUpperCase() === 'TRUE',
-        pastBal:  r[6] ? parseFloat(r[6]) : undefined,
-      }));
+    const timeline = kopRows.filter(r=>r[0]&&r[2]).map(r=>({
+      id:r[0]||'', type:r[1]||'income', name:r[2]||'',
+      amount:parseFloat(String(r[3]||'').replace(/\s/g,''))||0,
+      paid:(r[4]||'').toString().toUpperCase()==='TRUE',
+      isCredit:(r[5]||'').toString().toUpperCase()==='TRUE',
+      pastBal:r[6]?parseFloat(r[6]):undefined,
+    }));
     if (timeline.length > 0) {
       state.kopilka.timeline = timeline;
       recalcKopilkaBalance();
     }
   } else {
-    // Empty kopilka sheet — write initial data once
     await writeKopilkaToSheets();
-  }
-
-  // --- BASE PAYMENTS ---
-  const bpResp = await sheetsRequest('GET', `${SH_BP}!A1:C100`);
-  const bpRows = bpResp.values || [];
-  if (bpRows.length > 0) {
-    const bps = bpRows
-      .filter(r => r[0])
-      .map((r, i) => ({
-        id:     'bp_' + i,
-        name:   r[0] || '',
-        amount: parseFloat(String(r[1] || '').replace(/\s/g,'')) || 0,
-        day:    parseInt(r[2]) || 5,
-      }));
-    if (bps.length > 0) state.basePayments = bps;
-  } else {
-    // Empty BP sheet — write initial data once
-    await writeBPToSheets();
   }
 
   saveState();
@@ -846,45 +834,18 @@ async function writeBPToSheets() {
   await sheetsRequest('PUT', `${SH_BP}!A1`, { range:`${SH_BP}!A1`, majorDimension:'ROWS', values: [...header, ...rows] });
 }
 
-// ─── Write only paid status columns for a period row ──────────────────────
-// We never overwrite names/amounts — only the paid (TRUE/FALSE) columns.
-// Paid status is in col E, H, K, N... (every 3rd starting at col 5 = index 4)
+// ─── Write full period row to sheet (name, income, all expenses) ──────────
 async function writePeriodRow(periodIdx) {
   if (!gAccessToken) return;
   const p = state.periods[periodIdx];
   const sheetRow = periodIdx + 1; // 1-indexed, no header row
-
-  if (!p.expenses.length) return;
-
-  // Build batch update: one range per paid-status cell
-  const data = p.expenses.map((e, i) => {
-    // col index: expenses start at C(2), each expense is 3 cols wide
-    // paid col is the 3rd of each triplet: index 2 + i*3 + 2 = 4 + i*3
-    const colIdx = 4 + i * 3; // 0-based
-    const colLetter = colIndexToLetter(colIdx);
-    return {
-      range: `${SH_PERIODS}!${colLetter}${sheetRow}`,
-      majorDimension: 'ROWS',
-      values: [[e.paid ? 'TRUE' : 'FALSE']]
-    };
+  const row = [p.name, p.income];
+  p.expenses.forEach(e => { row.push(e.name, e.amount, e.paid ? 'TRUE' : 'FALSE'); });
+  await sheetsRequest('PUT', `${SH_PERIODS}!A${sheetRow}`, {
+    range: `${SH_PERIODS}!A${sheetRow}`,
+    majorDimension: 'ROWS',
+    values: [row]
   });
-
-  await sheetsRequest('BATCH_UPDATE', null, {
-    valueInputOption: 'USER_ENTERED',
-    data
-  });
-}
-
-function colIndexToLetter(idx) {
-  // 0=A, 1=B, ... 25=Z, 26=AA, etc.
-  let result = '';
-  idx += 1; // 1-based
-  while (idx > 0) {
-    const rem = (idx - 1) % 26;
-    result = String.fromCharCode(65 + rem) + result;
-    idx = Math.floor((idx - 1) / 26);
-  }
-  return result;
 }
 
 // ─── Debounced sync wrapper ────────────────────────────────────────────────
@@ -925,7 +886,13 @@ async function manualSync() {
 // ═══════════════════════════════════════════
 function fmt(n){return Math.round(n).toLocaleString('ru-RU')+' ₽';}
 let toastTimer=null;
-function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');if(toastTimer)clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),2200);}
+function showToast(msg, duration){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.classList.add('show');
+  if(toastTimer)clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'), duration||2500);
+}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
 function openModal(id){document.getElementById(id).classList.add('open');}
 
@@ -1207,8 +1174,6 @@ function saveKopOp(){
 // SETTINGS
 // ═══════════════════════════════════════════
 function renderSettings(){
-  document.getElementById('salary-input').value=state.salary||150000;
-  updateSalaryPreview();
   renderBPList();
   renderAuthCard();
 }
