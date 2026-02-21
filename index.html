@@ -1,0 +1,1310 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#F5F0E8">
+<title>Мои финансы</title>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;700;800&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --cream:#F5F0E8; --white:#FFF; --ink:#1A1A2E; --ink-light:#4A4A6A; --ink-muted:#9898B0;
+  --violet:#7C5CBF; --violet-light:#EDE8F7;
+  --green:#2ECC8E; --green-light:#E0F7EF;
+  --coral:#FF6B6B; --coral-light:#FFEDED;
+  --yellow:#FFD166; --yellow-light:#FFF7E0;
+  --blue:#4A90D9; --blue-light:#E8F2FC;
+  --shadow:0 4px 20px rgba(26,26,46,.08);
+  --r:20px; --rs:12px; --nav:72px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--ink);min-height:100vh;max-width:430px;margin:0 auto;overflow-x:hidden}
+.screen{display:none;flex-direction:column;min-height:100vh;padding-bottom:calc(var(--nav) + 16px)}
+.screen.active{display:flex}
+
+/* TOPBAR */
+.topbar{padding:52px 24px 16px;background:var(--cream);position:sticky;top:0;z-index:10;display:flex;align-items:flex-start;justify-content:space-between}
+.topbar-title{font-family:'Unbounded',sans-serif;font-size:22px;font-weight:800;letter-spacing:-.5px}
+.topbar-right{display:flex;gap:8px;align-items:center;margin-top:4px}
+.icon-btn{width:40px;height:40px;background:var(--white);border:none;border-radius:12px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow);transition:transform .1s}
+.icon-btn:active{transform:scale(.92)}
+
+/* SYNC STATUS */
+.sync-badge{display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;transition:all .2s}
+.sync-badge.connected{background:var(--green-light);color:var(--green)}
+.sync-badge.syncing{background:var(--yellow-light);color:#B8860B}
+.sync-badge.error{background:var(--coral-light);color:var(--coral)}
+.sync-badge.offline{background:#F0EEF8;color:var(--ink-muted)}
+.sync-dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.sync-badge.syncing .sync-dot{animation:pulse .8s infinite}
+
+/* MINI KOPILKA */
+.mini-kopilka{margin:0 24px 16px;background:var(--violet-light);border-radius:var(--r);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;transition:transform .15s}
+.mini-kopilka:active{transform:scale(.98)}
+.mk-left{display:flex;align-items:center;gap:10px}
+.mk-icon{width:36px;height:36px;background:var(--violet);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px}
+.mk-label{font-size:11px;color:var(--violet);font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.mk-val{font-family:'Unbounded',sans-serif;font-size:16px;font-weight:800;color:var(--violet);margin-top:2px}
+.mk-arrow{font-size:20px;color:var(--violet);opacity:.4}
+
+/* PERIOD NAV */
+.period-nav{display:flex;align-items:center;gap:10px;padding:0 24px;margin-bottom:14px}
+.nav-arrow{width:38px;height:38px;background:var(--white);border:none;border-radius:11px;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow);transition:transform .1s;color:var(--ink);line-height:1}
+.nav-arrow:active{transform:scale(.9)}
+.nav-arrow:disabled{opacity:.25}
+.period-center{flex:1;text-align:center}
+.period-title{font-family:'Unbounded',sans-serif;font-size:15px;font-weight:700}
+
+/* HERO CARD */
+.hero-card{margin:0 24px 14px;background:var(--ink);border-radius:var(--r);padding:20px 22px;color:white;position:relative;overflow:hidden}
+.hero-card::before{content:'';position:absolute;top:-40px;right:-40px;width:150px;height:150px;background:var(--violet);border-radius:50%;opacity:.35}
+.hero-card::after{content:'';position:absolute;bottom:-50px;left:10px;width:180px;height:180px;background:var(--green);border-radius:50%;opacity:.12}
+.hero-income-block{position:relative;z-index:1;margin-bottom:14px}
+.hero-income-label{font-size:11px;font-weight:700;opacity:.5;text-transform:uppercase;letter-spacing:.8px}
+.hero-income-row{display:flex;align-items:center;gap:10px;margin-top:2px}
+.hero-income-val{font-family:'Unbounded',sans-serif;font-size:30px;font-weight:800;letter-spacing:-1px}
+.hero-edit-btn{background:rgba(255,255,255,.12);border:none;border-radius:8px;color:white;padding:4px 10px;font-family:'Nunito',sans-serif;font-size:12px;font-weight:700;cursor:pointer;opacity:.7}
+.hero-edit-btn:active{opacity:1}
+.hero-row{display:flex;gap:8px;position:relative;z-index:1}
+.hero-stat{flex:1;background:rgba(255,255,255,.08);border-radius:13px;padding:11px 12px}
+.hero-stat-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;opacity:.5;margin-bottom:4px}
+.hero-stat-val{font-family:'Unbounded',sans-serif;font-size:14px;font-weight:800;letter-spacing:-.3px}
+.green{color:var(--green)} .coral{color:var(--coral)} .yellow{color:var(--yellow)}
+
+/* PROGRESS */
+.prog-wrap{padding:0 24px;margin-bottom:16px}
+.prog-label{display:flex;justify-content:space-between;font-size:12px;font-weight:600;color:var(--ink-muted);margin-bottom:6px}
+.prog-bar{height:7px;background:#E8E5EE;border-radius:4px;overflow:hidden}
+.prog-fill{height:100%;border-radius:4px;transition:width .5s ease;background:var(--green)}
+.prog-fill.warn{background:var(--yellow)}
+.prog-fill.danger{background:var(--coral)}
+
+/* SECTION HEADER */
+.sec-hdr{display:flex;align-items:center;justify-content:space-between;padding:0 24px;margin-bottom:10px}
+.sec-title{font-family:'Unbounded',sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-muted)}
+.add-btn{background:var(--ink);color:white;border:none;border-radius:10px;padding:6px 14px;font-family:'Nunito',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:transform .1s}
+.add-btn:active{transform:scale(.95)}
+
+/* EXPENSE ITEMS */
+.exp-list{padding:0 24px;display:flex;flex-direction:column;gap:7px}
+.exp-item{background:var(--white);border-radius:var(--rs);padding:13px 14px;display:flex;align-items:center;gap:10px;box-shadow:var(--shadow);transition:all .25s;position:relative;overflow:hidden}
+.exp-item.paid{background:var(--green-light)}
+.exp-item.paid::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--green);border-radius:4px 0 0 4px}
+.exp-check{width:26px;height:26px;border-radius:8px;border:2px solid #D0CDE0;background:white;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .2s;cursor:pointer;font-size:13px;color:white}
+.exp-item.paid .exp-check{background:var(--green);border-color:var(--green)}
+.exp-info{flex:1;min-width:0}
+.exp-name{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.exp-item.paid .exp-name{color:var(--ink-light)}
+.exp-amt{font-family:'Unbounded',sans-serif;font-size:14px;font-weight:700;flex-shrink:0}
+.exp-item.paid .exp-amt{color:var(--green)}
+.exp-actions{display:flex;gap:5px;flex-shrink:0}
+.exp-btn{width:26px;height:26px;border:none;border-radius:7px;background:rgba(0,0,0,.05);cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center}
+.exp-btn.del{background:var(--coral-light);color:var(--coral)}
+
+/* KOPILKA SCREEN */
+.kop-hero{margin:0 24px 16px;background:linear-gradient(135deg,var(--violet) 0%,#5B3FA8 100%);border-radius:var(--r);padding:24px;color:white;position:relative;overflow:hidden}
+.kop-hero::before{content:'🏦';position:absolute;right:20px;top:16px;font-size:44px;opacity:.25}
+.kop-hero-lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;opacity:.65}
+.kop-hero-amt{font-family:'Unbounded',sans-serif;font-size:36px;font-weight:800;margin-top:6px;letter-spacing:-1px}
+.kop-btns{padding:0 24px;margin-bottom:16px;display:flex;gap:10px}
+.kop-btn{flex:1;padding:11px;border:none;border-radius:var(--rs);font-family:'Nunito',sans-serif;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;transition:transform .1s}
+.kop-btn:active{transform:scale(.96)}
+.kop-btn.add{background:var(--green-light);color:var(--green)}
+.kop-btn.sub{background:var(--coral-light);color:var(--coral)}
+
+/* TIMELINE */
+.tl-section-hdr{padding:4px 24px 8px;font-family:'Unbounded',sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--ink-muted)}
+.tl-item{margin:0 24px 6px;border-radius:var(--rs);padding:11px 14px;display:flex;align-items:center;gap:10px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+.tl-item.past{background:#F7F6F9;opacity:.75}
+.tl-item.future{background:var(--white)}
+.tl-item.danger-row{border:2px solid var(--coral);}
+.tl-dot{width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;font-weight:700}
+.tl-dot.inc.past{background:#E4E2EC;color:#888}
+.tl-dot.exp.past{background:#EDE8E8;color:#999}
+.tl-dot.inc.future{background:var(--green-light);color:var(--green)}
+.tl-dot.exp.future{background:var(--coral-light);color:var(--coral)}
+.tl-info{flex:1;min-width:0}
+.tl-name{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tl-item.past .tl-name{color:var(--ink-light)}
+.tl-bal{font-size:10px;font-weight:600;margin-top:2px}
+.tl-bal.ok{color:var(--green)}
+.tl-bal.warn{color:var(--coral)}
+.tl-right{display:flex;align-items:center;gap:7px;flex-shrink:0}
+.tl-amt{font-family:'Unbounded',sans-serif;font-size:13px;font-weight:800}
+.tl-item.past .tl-amt{color:var(--ink-muted)}
+.tl-amt.inc.future{color:var(--green)}
+.tl-amt.exp.future{color:var(--coral)}
+.tl-check{width:28px;height:28px;border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;transition:all .2s;flex-shrink:0}
+.tl-check.unpaid{background:var(--coral-light);color:var(--coral)}
+.tl-check.paid{background:var(--green-light);color:var(--green)}
+.tl-warn-icon{font-size:16px;flex-shrink:0}
+.tl-right-col{display:flex;flex-direction:column;align-items:flex-end}
+.exp-item.future-locked{opacity:.7}
+.exp-check.locked{background:#F0EEF8;color:var(--ink-muted);border-color:#E0DDF0;cursor:default;font-size:10px}
+
+/* SETTINGS */
+.set-section{padding:0 24px;margin-bottom:22px}
+.set-section-title{font-family:'Unbounded',sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-muted);margin-bottom:10px}
+.set-card{background:var(--white);border-radius:var(--r);padding:18px 20px;box-shadow:var(--shadow)}
+.set-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #F0EEF8}
+.set-row:last-child{border-bottom:none;padding-bottom:0}
+.set-row-lbl{font-size:14px;font-weight:700}
+.set-row-sub{font-size:12px;color:var(--ink-muted);margin-top:2px}
+.set-input{width:130px;border:2px solid #EEEEF5;border-radius:10px;padding:8px 12px;font-family:'Nunito',sans-serif;font-size:15px;font-weight:700;background:var(--cream);outline:none;text-align:right;transition:border-color .2s}
+.set-input:focus{border-color:var(--violet)}
+.set-save-btn{width:100%;margin-top:14px;padding:13px;background:var(--ink);color:white;border:none;border-radius:var(--rs);font-family:'Nunito',sans-serif;font-size:15px;font-weight:800;cursor:pointer;transition:transform .1s}
+.set-save-btn:active{transform:scale(.98)}
+.sal-preview{margin-top:14px;background:var(--cream);border-radius:12px;padding:14px 16px}
+.sal-preview-title{font-size:11px;font-weight:700;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.sal-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0}
+.sal-row-lbl{font-size:13px;color:var(--ink-light);font-weight:600}
+.sal-row-val{font-family:'Unbounded',sans-serif;font-size:13px;font-weight:700}
+
+/* GOOGLE AUTH CARD */
+.auth-card{margin:0 24px 16px;background:var(--white);border-radius:var(--r);padding:20px;box-shadow:var(--shadow)}
+.auth-card-title{font-family:'Unbounded',sans-serif;font-size:14px;font-weight:700;margin-bottom:8px}
+.auth-card-sub{font-size:13px;color:var(--ink-muted);line-height:1.5;margin-bottom:14px}
+.auth-btn{width:100%;padding:12px;border:none;border-radius:var(--rs);font-family:'Nunito',sans-serif;font-size:14px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:transform .1s}
+.auth-btn:active{transform:scale(.97)}
+.auth-btn.google{background:var(--ink);color:white}
+.auth-btn.disconnect{background:var(--coral-light);color:var(--coral)}
+.auth-status-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #F0EEF8}
+.auth-status-row:last-child{border-bottom:none}
+.auth-email{font-size:13px;font-weight:700;flex:1}
+.auth-sub{font-size:11px;color:var(--ink-muted)}
+
+/* BASE PAYMENTS */
+.bp-item{background:var(--white);border-radius:var(--rs);padding:12px 14px;display:flex;align-items:center;gap:10px;box-shadow:var(--shadow);margin-bottom:8px}
+.bp-badge{flex-shrink:0;width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;font-family:'Unbounded',sans-serif}
+.bp-badge.d5{background:var(--violet-light);color:var(--violet)}
+.bp-badge.d20{background:var(--blue-light);color:var(--blue)}
+.bp-info{flex:1;min-width:0}
+.bp-name{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bp-sub{font-size:11px;color:var(--ink-muted);margin-top:1px}
+.bp-amt{font-family:'Unbounded',sans-serif;font-size:14px;font-weight:700;flex-shrink:0;margin-right:6px}
+.bp-actions{display:flex;gap:5px;flex-shrink:0}
+.bp-btn{width:26px;height:26px;border:none;border-radius:7px;background:rgba(0,0,0,.05);cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center}
+.bp-btn.del{background:var(--coral-light);color:var(--coral)}
+
+/* BOTTOM NAV */
+.bottom-nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;height:var(--nav);background:var(--ink);display:flex;border-radius:24px 24px 0 0;padding:0 8px;z-index:100}
+.nav-tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border:none;background:none;color:rgba(255,255,255,.35);cursor:pointer;transition:color .2s;padding:0}
+.nav-tab.active{color:white}
+.nav-wrap{display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 16px;border-radius:14px}
+.nav-tab.active .nav-wrap{background:rgba(255,255,255,.1)}
+.nav-ico{font-size:21px;line-height:1}
+.nav-lbl{font-family:'Nunito',sans-serif;font-size:10px;font-weight:700}
+
+/* MODALS */
+.modal-ov{display:none;position:fixed;inset:0;background:rgba(26,26,46,.5);z-index:200;align-items:flex-end;justify-content:center}
+.modal-ov.open{display:flex}
+.modal{background:var(--white);border-radius:24px 24px 0 0;padding:24px 24px 44px;width:100%;max-width:430px;animation:slideUp .28s ease}
+@keyframes slideUp{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}
+.modal-title{font-family:'Unbounded',sans-serif;font-size:17px;font-weight:800;margin-bottom:18px}
+.modal-field{margin-bottom:14px}
+.modal-label{font-size:12px;font-weight:700;color:var(--ink-muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px}
+.modal-input{width:100%;border:2px solid #EEEEF5;border-radius:var(--rs);padding:11px 14px;font-family:'Nunito',sans-serif;font-size:16px;font-weight:600;color:var(--ink);background:var(--cream);outline:none;transition:border-color .2s}
+.modal-input:focus{border-color:var(--violet)}
+.modal-seg{display:flex;gap:8px;margin-top:4px}
+.modal-seg-btn{flex:1;padding:11px;border:2px solid #EEEEF5;border-radius:var(--rs);background:var(--cream);font-family:'Nunito',sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:all .15s;color:var(--ink-muted)}
+.modal-seg-btn.active{border-color:var(--violet);background:var(--violet-light);color:var(--violet)}
+.modal-actions{display:flex;gap:10px;margin-top:18px}
+.modal-btn{flex:1;padding:13px;border:none;border-radius:var(--rs);font-family:'Nunito',sans-serif;font-size:15px;font-weight:800;cursor:pointer;transition:transform .1s}
+.modal-btn:active{transform:scale(.97)}
+.modal-btn.primary{background:var(--ink);color:white}
+.modal-btn.secondary{background:var(--cream);color:var(--ink)}
+
+/* TOAST */
+.toast{position:fixed;bottom:calc(var(--nav) + 14px);left:50%;transform:translateX(-50%) translateY(80px);background:var(--ink);color:white;padding:11px 20px;border-radius:100px;font-size:13px;font-weight:700;z-index:300;transition:transform .3s ease;white-space:nowrap;pointer-events:none}
+.toast.show{transform:translateX(-50%) translateY(0)}
+.empty-state{text-align:center;padding:32px 24px;color:var(--ink-muted)}
+.empty-ico{font-size:40px;margin-bottom:10px}
+.empty-txt{font-size:14px;font-weight:600}
+
+/* LOADING OVERLAY */
+.loading-ov{position:fixed;inset:0;background:var(--cream);z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+.loading-ov.hidden{display:none}
+.loading-spinner{width:40px;height:40px;border:3px solid #E8E5EE;border-top-color:var(--violet);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-txt{font-family:'Unbounded',sans-serif;font-size:13px;font-weight:700;color:var(--ink-muted)}
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div class="loading-ov" id="loading-ov">
+  <div class="loading-spinner"></div>
+  <div class="loading-txt" id="loading-txt">Загрузка...</div>
+</div>
+
+<!-- PERIODS -->
+<div class="screen active" id="screen-periods">
+  <div class="topbar">
+    <div class="topbar-title">Мои финансы ✦</div>
+    <div class="topbar-right">
+      <div class="sync-badge offline" id="sync-badge" onclick="manualSync()" title="Синхронизация">
+        <div class="sync-dot"></div>
+        <span id="sync-label">офлайн</span>
+      </div>
+      <button class="icon-btn" onclick="switchTab('settings')">⚙️</button>
+    </div>
+  </div>
+  <div class="mini-kopilka" onclick="switchTab('kopilka')">
+    <div class="mk-left">
+      <div class="mk-icon">🏦</div>
+      <div><div class="mk-label">Копилка</div><div class="mk-val" id="mk-val">0 ₽</div></div>
+    </div>
+    <div class="mk-arrow">›</div>
+  </div>
+  <div class="period-nav">
+    <button class="nav-arrow" id="btn-prev" onclick="changePeriod(-1)">‹</button>
+    <div class="period-center"><div class="period-title" id="period-name">—</div></div>
+    <button class="nav-arrow" id="btn-next" onclick="changePeriod(1)">›</button>
+  </div>
+  <div class="hero-card">
+    <div class="hero-income-block">
+      <div class="hero-income-label">Получено</div>
+      <div class="hero-income-row">
+        <div class="hero-income-val" id="hero-income">0 ₽</div>
+        <button class="hero-edit-btn" onclick="openEditIncome()">✏️ изменить</button>
+      </div>
+    </div>
+    <div class="hero-row">
+      <div class="hero-stat"><div class="hero-stat-lbl">Расходы</div><div class="hero-stat-val coral" id="hero-exp">0 ₽</div></div>
+      <div class="hero-stat"><div class="hero-stat-lbl">Оплачено</div><div class="hero-stat-val green" id="hero-paid">0 ₽</div></div>
+      <div class="hero-stat"><div class="hero-stat-lbl">Остаток</div><div class="hero-stat-val yellow" id="hero-left">0 ₽</div></div>
+    </div>
+  </div>
+  <div class="prog-wrap">
+    <div class="prog-label"><span>Оплачено расходов</span><span id="prog-pct">0%</span></div>
+    <div class="prog-bar"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+  </div>
+  <div class="sec-hdr">
+    <div class="sec-title">Расходы</div>
+    <button class="add-btn" onclick="openAddExpense()">+ Добавить</button>
+  </div>
+  <div class="exp-list" id="exp-list"></div>
+  <div style="height:16px"></div>
+</div>
+
+<!-- KOPILKA -->
+<div class="screen" id="screen-kopilka">
+  <div class="topbar">
+    <div class="topbar-title">Копилка 🏦</div>
+    <button class="icon-btn" onclick="switchTab('settings')">⚙️</button>
+  </div>
+  <div class="kop-hero">
+    <div class="kop-hero-lbl">Баланс копилки</div>
+    <div class="kop-hero-amt" id="kop-balance">0 ₽</div>
+  </div>
+  <div class="kop-btns">
+    <button class="kop-btn add" onclick="openKopilkaOp('add')">+ Пополнить</button>
+    <button class="kop-btn sub" onclick="openKopilkaOp('sub')">− Снять</button>
+  </div>
+  <div id="kop-timeline"></div>
+  <div style="height:16px"></div>
+</div>
+
+<!-- SETTINGS -->
+<div class="screen" id="screen-settings">
+  <div class="topbar">
+    <div class="topbar-title">Настройки ⚙️</div>
+  </div>
+
+  <!-- Google Sheets -->
+  <div class="set-section">
+    <div class="set-section-title">Google Sheets</div>
+    <div class="set-card" id="auth-card-content"></div>
+  </div>
+
+  <!-- Зарплата -->
+  <div class="set-section">
+    <div class="set-section-title">Зарплата</div>
+    <div class="set-card">
+      <div class="set-row">
+        <div><div class="set-row-lbl">Оклад</div><div class="set-row-sub">Базовая сумма в месяц</div></div>
+        <input class="set-input" id="salary-input" type="number" placeholder="150000">
+      </div>
+      <div class="sal-preview" id="sal-preview"></div>
+      <button class="set-save-btn" onclick="saveSalary()">Сохранить оклад</button>
+    </div>
+  </div>
+
+  <!-- Базовые платежи -->
+  <div class="set-section">
+    <div class="set-section-title">Базовые платежи</div>
+    <div style="font-size:13px;color:var(--ink-muted);margin-bottom:12px;line-height:1.5">
+      Измени название или сумму — обновится во всех будущих периодах
+    </div>
+    <div id="bp-list"></div>
+    <button class="set-save-btn" style="margin-top:4px" onclick="openAddBP()">+ Добавить базовый платёж</button>
+  </div>
+
+  <!-- Данные -->
+  <div class="set-section">
+    <div class="set-section-title">Данные</div>
+    <div class="set-card">
+      <div class="set-row">
+        <div><div class="set-row-lbl">Мои финансы</div><div class="set-row-sub">Версия 2.1 · Google Sheets — источник правды</div></div>
+      </div>
+      <div class="set-row" style="cursor:pointer" onclick="resetData()">
+        <div><div class="set-row-lbl" style="color:var(--coral)">Сбросить данные</div><div class="set-row-sub">Вернуть к начальным данным</div></div>
+        <span style="color:var(--coral)">›</span>
+      </div>
+    </div>
+  </div>
+  <div style="height:16px"></div>
+</div>
+
+<!-- NAV -->
+<nav class="bottom-nav">
+  <button class="nav-tab active" onclick="switchTab('periods')" id="nav-periods">
+    <div class="nav-wrap"><span class="nav-ico">📅</span><span class="nav-lbl">Периоды</span></div>
+  </button>
+  <button class="nav-tab" onclick="switchTab('kopilka')" id="nav-kopilka">
+    <div class="nav-wrap"><span class="nav-ico">🏦</span><span class="nav-lbl">Копилка</span></div>
+  </button>
+  <button class="nav-tab" onclick="switchTab('settings')" id="nav-settings">
+    <div class="nav-wrap"><span class="nav-ico">⚙️</span><span class="nav-lbl">Настройки</span></div>
+  </button>
+</nav>
+
+<!-- MODAL: Expense -->
+<div class="modal-ov" id="modal-expense">
+  <div class="modal">
+    <div class="modal-title" id="modal-exp-title">Новый расход</div>
+    <div class="modal-field"><div class="modal-label">Название</div><input class="modal-input" id="exp-name-in" placeholder="Например, Озон" type="text"></div>
+    <div class="modal-field"><div class="modal-label">Сумма, ₽</div><input class="modal-input" id="exp-amt-in" placeholder="0" type="number" inputmode="numeric"></div>
+    <div class="modal-actions">
+      <button class="modal-btn secondary" onclick="closeModal('modal-expense')">Отмена</button>
+      <button class="modal-btn primary" onclick="saveExpense()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Income -->
+<div class="modal-ov" id="modal-income">
+  <div class="modal">
+    <div class="modal-title">Изменить полученную сумму</div>
+    <div class="modal-field"><div class="modal-label">Получено, ₽</div><input class="modal-input" id="income-in" placeholder="0" type="number" inputmode="numeric"></div>
+    <div class="modal-actions">
+      <button class="modal-btn secondary" onclick="closeModal('modal-income')">Отмена</button>
+      <button class="modal-btn primary" onclick="saveIncome()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Kopilka Op -->
+<div class="modal-ov" id="modal-kop">
+  <div class="modal">
+    <div class="modal-title" id="modal-kop-title">Пополнить копилку</div>
+    <div class="modal-field"><div class="modal-label">Сумма, ₽</div><input class="modal-input" id="kop-amt-in" placeholder="0" type="number" inputmode="numeric"></div>
+    <div class="modal-field"><div class="modal-label">Комментарий</div><input class="modal-input" id="kop-comment-in" placeholder="Например, Проценты по вкладу" type="text"></div>
+    <div class="modal-actions">
+      <button class="modal-btn secondary" onclick="closeModal('modal-kop')">Отмена</button>
+      <button class="modal-btn primary" onclick="saveKopOp()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Base Payment -->
+<div class="modal-ov" id="modal-bp">
+  <div class="modal">
+    <div class="modal-title" id="modal-bp-title">Базовый платёж</div>
+    <div class="modal-field"><div class="modal-label">Название</div><input class="modal-input" id="bp-name-in" placeholder="Например, Ресницы" type="text"></div>
+    <div class="modal-field"><div class="modal-label">Сумма, ₽</div><input class="modal-input" id="bp-amt-in" placeholder="0" type="number" inputmode="numeric"></div>
+    <div class="modal-field">
+      <div class="modal-label">Период (в какое число)</div>
+      <div class="modal-seg">
+        <button class="modal-seg-btn active" id="bp-seg-5" onclick="selectBPDay(5)">5 числа</button>
+        <button class="modal-seg-btn" id="bp-seg-20" onclick="selectBPDay(20)">20 числа</button>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="modal-btn secondary" onclick="closeModal('modal-bp')">Отмена</button>
+      <button class="modal-btn primary" onclick="saveBP()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Google Identity Services -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+
+<script>
+// ═══════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════
+const GOOGLE_CLIENT_ID = '91072547655-uut7hbnspu6thk06jlhoktngtqufcaoi.apps.googleusercontent.com';
+const SPREADSHEET_ID   = '1-WAxJNhPFJPVs4j9PZjBpMGUDk6J5FISpFATpO_HPIE';
+const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
+
+// Sheet names
+const SH_PERIODS = 'Периоды';
+const SH_KOPILKA = 'Копилка';
+const SH_BP      = 'Базовые платежи';
+
+// ═══════════════════════════════════════════
+// RUSSIAN PUBLIC HOLIDAYS
+// ═══════════════════════════════════════════
+const RU_HOLIDAYS = new Set([
+  '2025-1-1','2025-1-2','2025-1-3','2025-1-6','2025-1-7','2025-1-8',
+  '2025-2-24','2025-3-10','2025-5-1','2025-5-2','2025-5-8','2025-5-9',
+  '2025-6-12','2025-6-13','2025-11-4','2025-12-31',
+  '2026-1-1','2026-1-2','2026-1-5','2026-1-6','2026-1-7','2026-1-8','2026-1-9',
+  '2026-2-23','2026-3-9','2026-5-1','2026-5-4','2026-5-11',
+  '2026-6-12','2026-11-4','2026-12-31',
+  '2027-1-1','2027-1-4','2027-1-5','2027-1-6','2027-1-7','2027-1-8',
+  '2027-2-22','2027-2-23','2027-3-8','2027-5-3','2027-5-10',
+  '2027-6-14','2027-11-4','2027-11-5',
+]);
+function isWorkingDay(y,m,d){const dt=new Date(y,m,d);const dow=dt.getDay();if(dow===0||dow===6)return false;return!RU_HOLIDAYS.has(`${y}-${m+1}-${d}`);}
+function countWorkingDays(y,m,from,to){const last=new Date(y,m+1,0).getDate();let cnt=0;for(let d=from;d<=Math.min(to,last);d++){if(isWorkingDay(y,m,d))cnt++;}return cnt;}
+function calcAvans(salary,y,m){const total=countWorkingDays(y,m,1,31);if(!total)return 0;return Math.round(salary*countWorkingDays(y,m,1,15)/total);}
+function calcZarplata(salary,y,m){let pm=m-1,py=y;if(pm<0){pm=11;py--;}return salary-calcAvans(salary,py,pm);}
+function genSalaryPreview(salary){
+  const mn=['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+  const t=new Date();let y=t.getFullYear(),m=t.getMonth();const res=[];
+  for(let i=0;i<10&&res.length<6;i++){
+    res.push({label:mn[m]+' — 20 (аванс)',val:calcAvans(salary,y,m),note:'avans'});
+    if(res.length<6){let nm=m+1,ny=y;if(nm>11){nm=0;ny++;}res.push({label:mn[nm]+' — 5 (зарплата)',val:calcZarplata(salary,ny,nm),note:'zp'});}
+    m++;if(m>11){m=0;y++;}
+  }
+  return res.slice(0,6);
+}
+
+// ═══════════════════════════════════════════
+// INITIAL DATA (fallback)
+// ═══════════════════════════════════════════
+const INIT_PERIODS = [
+  {name:'декабрь 5',income:82500,expenses:[{name:'Ресницы',amount:3000,paid:false},{name:'Яндекс Пей',amount:10914,paid:false},{name:'Тинькоф авто',amount:4690,paid:false},{name:'Альфа',amount:10400,paid:false},{name:'В копилку',amount:29000,paid:false},{name:'Тинькоф кредитка',amount:10800,paid:false}]},
+  {name:'декабрь 20',income:65000,expenses:[{name:'Озон декабрь',amount:29000,paid:false},{name:'Тинькоф кредитка',amount:10800,paid:false},{name:'В копилку',amount:2500,paid:false},{name:'Яндекс Пей',amount:10914,paid:false},{name:'Альфа',amount:10400,paid:false},{name:'Продукты',amount:10000,paid:false}]},
+  {name:'февраль 5',income:128800,expenses:[{name:'Тинькоф авто',amount:4690,paid:false},{name:'Яндекс Пей',amount:29910,paid:false},{name:'Альфа',amount:10400,paid:false},{name:'В копилку',amount:55500,paid:false},{name:'Продукты',amount:9000,paid:false},{name:'Мой телефон',amount:390,paid:false},{name:'Долг маме',amount:22500,paid:false}]},
+  {name:'февраль 20',income:78947,expenses:[{name:'Тинькоф авто',amount:4690,paid:false},{name:'Тинькоф кредитка',amount:6400,paid:false},{name:'Долг маме',amount:22500,paid:false},{name:'Волосы',amount:40000,paid:false},{name:'Сплит',amount:1650,paid:false},{name:'Озон февраль',amount:30000,paid:false},{name:'Мелочи',amount:10000,paid:false}]},
+  {name:'март 5',income:71053,expenses:[{name:'Тинькоф авто',amount:4690,paid:false},{name:'Яндекс Пей',amount:29849,paid:false},{name:'Альфа',amount:10400,paid:false},{name:'В копилку',amount:26900,paid:false},{name:'Продукты',amount:9000,paid:false},{name:'Мой телефон',amount:390,paid:false},{name:'Ресницы',amount:2500,paid:false},{name:'Тиньков кредитка',amount:1900,paid:false}]},
+  {name:'март 20',income:64286,expenses:[{name:'В копилку',amount:49000,paid:false},{name:'Продукты',amount:7900,paid:false},{name:'Мама связь',amount:1500,paid:false},{name:'Озон март',amount:3344,paid:false},{name:'Ресницы',amount:2500,paid:false}]},
+  {name:'апрель 5',income:85714,expenses:[{name:'Яндекс Пей',amount:29849,paid:false},{name:'Тинькоф авто',amount:4690,paid:false},{name:'Альфа',amount:10400,paid:false},{name:'В копилку',amount:26900,paid:false},{name:'Продукты',amount:9000,paid:false},{name:'Мой телефон',amount:390,paid:false},{name:'Ресницы',amount:2500,paid:false},{name:'Тиньков кредитка',amount:1900,paid:false}]},
+  {name:'апрель 20',income:75000,expenses:[{name:'В копилку',amount:60000,paid:false},{name:'Продукты',amount:8700,paid:false},{name:'Мама связь',amount:1500,paid:false},{name:'Озон апрель',amount:3174,paid:false},{name:'Ресницы',amount:2500,paid:false}]},
+  {name:'май 5',income:75000,expenses:[{name:'Яндекс Пей',amount:29849,paid:false},{name:'Тинькоф авто',amount:4690,paid:false},{name:'Альфа',amount:10400,paid:false},{name:'В копилку',amount:15000,paid:false},{name:'Продукты',amount:10000,paid:false},{name:'Мой телефон',amount:390,paid:false},{name:'Ресницы',amount:2500,paid:false},{name:'Тиньков кредитка',amount:1900,paid:false}]},
+  {name:'май 20',income:66667,expenses:[{name:'В копилку',amount:55700,paid:false},{name:'Продукты',amount:9400,paid:false},{name:'Чат гпт',amount:2490,paid:false},{name:'Мама связь',amount:1500,paid:false},{name:'Озон май',amount:3159,paid:false}]},
+  {name:'июнь 5',income:83333,expenses:[{name:'Ресницы',amount:2500,paid:false},{name:'Яндекс Пей',amount:18935,paid:false},{name:'Тинькоф авто',amount:4690,paid:false},{name:'Альфа',amount:10400,paid:false},{name:'В копилку',amount:30000,paid:false},{name:'Продукты',amount:9500,paid:false},{name:'Тиньков кредитка',amount:1900,paid:false}]},
+  {name:'июнь 20',income:71429,expenses:[{name:'Продукты',amount:10000,paid:false},{name:'В копилку',amount:60000,paid:false},{name:'Чат гпт',amount:2600,paid:false},{name:'Мама связь',amount:1500,paid:false}]},
+];
+const INIT_BASE_PAYMENTS = [
+  {id:'bp1',name:'Тинькоф авто',amount:4690,day:5},
+  {id:'bp2',name:'Яндекс Пей',amount:29849,day:5},
+  {id:'bp3',name:'Альфа',amount:10400,day:5},
+  {id:'bp4',name:'Продукты',amount:9000,day:5},
+  {id:'bp5',name:'Мой телефон',amount:390,day:5},
+  {id:'bp6',name:'Ресницы',amount:2500,day:5},
+  {id:'bp7',name:'Тинькоф кредитка',amount:1900,day:5},
+  {id:'bp8',name:'Продукты',amount:8000,day:20},
+  {id:'bp9',name:'Мама связь',amount:1500,day:20},
+  {id:'bp10',name:'Ресницы',amount:2500,day:20},
+  {id:'bp11',name:'Чат гпт',amount:2500,day:20},
+];
+const INIT_KOPILKA = {
+  balance:42369,
+  timeline:[
+    {id:'t1',type:'income',name:'декабрь 30',amount:15000,paid:true,isCredit:false,pastBal:76010},
+    {id:'t2',type:'income',name:'январь 20',amount:22500,paid:true,isCredit:false,pastBal:86331},
+    {id:'t3',type:'expense',name:'мама в долг февраль 13',amount:70000,paid:true,isCredit:false,pastBal:16331},
+    {id:'t4',type:'income',name:'февраль 5',amount:55500,paid:true,isCredit:false,pastBal:91831},
+    {id:'t5',type:'expense',name:'кредит февраль 5',amount:93000,paid:true,isCredit:true,pastBal:9192},
+    {id:'t6',type:'income',name:'мама возврат февраль 24',amount:50000,paid:true,isCredit:false,pastBal:59192},
+    {id:'t7',type:'income',name:'февраль 20',amount:62800,paid:false,isCredit:false},
+    {id:'t8',type:'expense',name:'кредит февраль 20',amount:17000,paid:false,isCredit:true},
+    {id:'t9',type:'income',name:'март 5',amount:21200,paid:false,isCredit:false},
+    {id:'t10',type:'expense',name:'кредит март 5',amount:93000,paid:false,isCredit:true},
+    {id:'t11',type:'income',name:'март 20',amount:49000,paid:false,isCredit:false},
+    {id:'t12',type:'expense',name:'кредит март 20',amount:17000,paid:false,isCredit:true},
+    {id:'t13',type:'income',name:'апрель 5',amount:26900,paid:false,isCredit:false},
+    {id:'t14',type:'expense',name:'кредит апрель 5',amount:93000,paid:false,isCredit:true},
+    {id:'t15',type:'income',name:'апрель 20',amount:60000,paid:false,isCredit:false},
+    {id:'t16',type:'expense',name:'кредит апрель 20',amount:17000,paid:false,isCredit:true},
+    {id:'t17',type:'income',name:'май 5',amount:15000,paid:false,isCredit:false},
+    {id:'t18',type:'expense',name:'кредит май 5',amount:93000,paid:false,isCredit:true},
+  ]
+};
+
+// ═══════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════
+function loadState(){
+  try{const s=localStorage.getItem('finance_v9');if(s)return JSON.parse(s);}catch(e){}
+  return{periods:[],kopilka:JSON.parse(JSON.stringify(INIT_KOPILKA)),basePayments:JSON.parse(JSON.stringify(INIT_BASE_PAYMENTS)),currentIdx:0,salary:150000};
+}
+function saveState(){localStorage.setItem('finance_v9',JSON.stringify(state));}
+
+let state = loadState();
+let curTab = 'periods';
+let editExpIdx = null;
+let kopOpType = 'add';
+let editBPIdx = null;
+let bpDay = 5;
+
+// ═══════════════════════════════════════════
+// GOOGLE AUTH & SHEETS
+// ═══════════════════════════════════════════
+let gAccessToken = null;
+let gUserEmail   = null;
+let tokenClient  = null;
+let isSyncing    = false;
+
+function setSyncStatus(status, label) {
+  const badge = document.getElementById('sync-badge');
+  const lbl   = document.getElementById('sync-label');
+  badge.className = 'sync-badge ' + status;
+  lbl.textContent = label;
+}
+
+function initGoogleAuth() {
+  // Restore token from localStorage if available
+  const saved = localStorage.getItem('gauth_v2');
+  if (saved) {
+    try {
+      const d = JSON.parse(saved);
+      if (d.email) { gUserEmail = d.email; }
+    } catch(e) {}
+  }
+
+  // Wait for GSI to load
+  const waitGSI = setInterval(() => {
+    if (typeof google === 'undefined' || !google.accounts) return;
+    clearInterval(waitGSI);
+
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope: SCOPES,
+      callback: async (resp) => {
+        if (resp.error) { setSyncStatus('error','ошибка'); showToast('❌ Ошибка авторизации'); return; }
+        gAccessToken = resp.access_token;
+        setSyncStatus('syncing','синхронизация...');
+        try {
+          await initSheets();
+          await syncFromSheets();
+          setSyncStatus('connected','синхронизировано');
+          showToast('✅ Подключено к Google Sheets!');
+        } catch(e) {
+          setSyncStatus('error','ошибка');
+          showToast('❌ ' + (e.message || 'Ошибка синхронизации'));
+        }
+        renderSettings();
+      }
+    });
+
+    // Auto-try silent token refresh if we had email before
+    if (gUserEmail) {
+      setSyncStatus('syncing','восстановление...');
+      tokenClient.requestAccessToken({ prompt: '' });
+    }
+  }, 200);
+}
+
+function signIn() {
+  if (!tokenClient) { showToast('⚠️ Google API не загружен'); return; }
+  tokenClient.requestAccessToken({ prompt: 'consent' });
+}
+
+function signOut() {
+  if (gAccessToken) {
+    google.accounts.oauth2.revoke(gAccessToken);
+    gAccessToken = null;
+  }
+  gUserEmail = null;
+  localStorage.removeItem('gauth_v2');
+  setSyncStatus('offline','офлайн');
+  renderSettings();
+  showToast('👋 Отключено от Google');
+}
+
+async function sheetsRequest(method, range, body) {
+  if (!gAccessToken) throw new Error('Нет авторизации');
+  const base = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}`;
+  let url, opts;
+
+  if (method === 'GET') {
+    url = `${base}/values/${encodeURIComponent(range)}?majorDimension=ROWS`;
+    opts = { headers: { Authorization: `Bearer ${gAccessToken}` } };
+  } else if (method === 'PUT') {
+    url = `${base}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`;
+    opts = { method:'PUT', headers:{'Authorization':`Bearer ${gAccessToken}`,'Content-Type':'application/json'}, body:JSON.stringify(body) };
+  } else if (method === 'CLEAR') {
+    url = `${base}/values/${encodeURIComponent(range)}:clear`;
+    opts = { method:'POST', headers:{'Authorization':`Bearer ${gAccessToken}`,'Content-Type':'application/json'}, body:'{}' };
+  } else if (method === 'BATCH_UPDATE') {
+    url = `${base}/values:batchUpdate`;
+    opts = { method:'POST', headers:{'Authorization':`Bearer ${gAccessToken}`,'Content-Type':'application/json'}, body:JSON.stringify(body) };
+  }
+
+  const resp = await fetch(url, opts);
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    // Token might be expired — reset
+    if (resp.status === 401) { gAccessToken = null; setSyncStatus('offline','офлайн'); }
+    throw new Error(err.error?.message || `HTTP ${resp.status}`);
+  }
+  return resp.json();
+}
+
+// ─── Check if sheets exist and have headers, create if needed ─────────────
+async function initSheets() {
+  // Get spreadsheet metadata to see existing sheet names
+  const metaResp = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}?fields=sheets.properties.title`,
+    { headers: { Authorization: `Bearer ${gAccessToken}` } }
+  );
+  const meta = await metaResp.json();
+  const existingSheets = meta.sheets?.map(s => s.properties.title) || [];
+
+  // Write headers if sheets are empty
+  const needed = [
+    { name: SH_PERIODS, header: null }, // no fixed header, data starts at row 1
+    { name: SH_KOPILKA, header: [['id','тип','название','сумма','оплачено','isCredit','балансПосле']] },
+    { name: SH_BP,      header: [['название','сумма','день']] },
+  ];
+
+  for (const s of needed) {
+    if (!existingSheets.includes(s.name)) {
+      throw new Error(`Лист "${s.name}" не найден. Создай его в таблице.`);
+    }
+    if (s.header) {
+      // Check if header row exists
+      try {
+        const r = await sheetsRequest('GET', `${s.name}!A1:G1`);
+        if (!r.values || !r.values[0] || r.values[0][0] !== s.header[0][0]) {
+          await sheetsRequest('PUT', `${s.name}!A1`, { range:`${s.name}!A1`, majorDimension:'ROWS', values: s.header });
+        }
+      } catch(e) {
+        await sheetsRequest('PUT', `${s.name}!A1`, { range:`${s.name}!A1`, majorDimension:'ROWS', values: s.header });
+      }
+    }
+  }
+
+  // Get user info
+  try {
+    const ui = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: `Bearer ${gAccessToken}` } });
+    const ud = await ui.json();
+    gUserEmail = ud.email;
+    localStorage.setItem('gauth_v2', JSON.stringify({ email: gUserEmail }));
+  } catch(e) {}
+}
+
+// ═══════════════════════════════════════════
+// SYNC: READ FROM SHEETS
+// ═══════════════════════════════════════════
+async function syncFromSheets() {
+  setSyncStatus('syncing','чтение...');
+
+  // --- PERIODS ---
+  // Table is source of truth. App only reads periods, never overwrites them.
+  // Only paid status is written back by the app.
+  const perResp = await sheetsRequest('GET', `${SH_PERIODS}!A1:ZZ500`);
+  const perRows = perResp.values || [];
+
+  if (perRows.length > 0) {
+    const curName = state.periods[state.currentIdx]?.name;
+    const periods = [];
+
+    for (const row of perRows) {
+      if (!row[0] || !row[1]) continue; // need at least name + income
+      const name   = row[0].trim();
+      const income = parseFloat(String(row[1]).replace(/\s/g,'')) || 0;
+      const expenses = [];
+
+      // expenses: triplets starting at col C (index 2): name, amount, paid
+      for (let c = 2; c + 1 < row.length; c += 3) {
+        const expName = (row[c] || '').trim();
+        const expAmt  = parseFloat(String(row[c+1] || '').replace(/\s/g,''));
+        const expPaid = (row[c+2] || '').toString().toUpperCase() === 'TRUE';
+        if (expName && !isNaN(expAmt) && expAmt > 0) {
+          expenses.push({ name: expName, amount: expAmt, paid: expPaid });
+        }
+      }
+      periods.push({ name, income, expenses });
+    }
+
+    if (periods.length > 0) {
+      state.periods = periods;
+      // Try to keep same period selected
+      const newIdx = periods.findIndex(p => p.name === curName);
+      // If current period not found, pick the most recent past/current period
+      if (newIdx >= 0) {
+        state.currentIdx = newIdx;
+      } else {
+        // Find last period that has already arrived
+        let best = 0;
+        for (let i = 0; i < periods.length; i++) {
+          const pd = getPeriodDate(periods[i].name);
+          const today = new Date(); today.setHours(0,0,0,0);
+          if (pd && pd <= today) best = i;
+        }
+        state.currentIdx = best;
+      }
+    }
+  }
+  // If sheet is empty — leave state.periods as-is (local data), don't overwrite sheet
+
+  // --- KOPILKA ---
+  const kopResp = await sheetsRequest('GET', `${SH_KOPILKA}!A1:G500`);
+  const kopRows = kopResp.values || [];
+  if (kopRows.length > 0) {
+    const timeline = kopRows
+      .filter(r => r[0] && r[2]) // has id and name
+      .map(r => ({
+        id:       r[0] || '',
+        type:     r[1] || 'income',
+        name:     r[2] || '',
+        amount:   parseFloat(String(r[3] || '').replace(/\s/g,'')) || 0,
+        paid:     (r[4] || '').toString().toUpperCase() === 'TRUE',
+        isCredit: (r[5] || '').toString().toUpperCase() === 'TRUE',
+        pastBal:  r[6] ? parseFloat(r[6]) : undefined,
+      }));
+    if (timeline.length > 0) {
+      state.kopilka.timeline = timeline;
+      recalcKopilkaBalance();
+    }
+  } else {
+    // Empty kopilka sheet — write initial data once
+    await writeKopilkaToSheets();
+  }
+
+  // --- BASE PAYMENTS ---
+  const bpResp = await sheetsRequest('GET', `${SH_BP}!A1:C100`);
+  const bpRows = bpResp.values || [];
+  if (bpRows.length > 0) {
+    const bps = bpRows
+      .filter(r => r[0])
+      .map((r, i) => ({
+        id:     'bp_' + i,
+        name:   r[0] || '',
+        amount: parseFloat(String(r[1] || '').replace(/\s/g,'')) || 0,
+        day:    parseInt(r[2]) || 5,
+      }));
+    if (bps.length > 0) state.basePayments = bps;
+  } else {
+    // Empty BP sheet — write initial data once
+    await writeBPToSheets();
+  }
+
+  saveState();
+}
+
+function recalcKopilkaBalance() {
+  // Balance = sum of all paid incomes - sum of all paid expenses
+  // We use pastBal of the last paid item if available, else recalc
+  const paid = state.kopilka.timeline.filter(t => t.paid);
+  if (paid.length === 0) { return; }
+  const last = paid[paid.length - 1];
+  if (last.pastBal !== undefined) {
+    state.kopilka.balance = last.pastBal;
+  } else {
+    // Fallback: recalculate
+    let bal = 0;
+    paid.forEach(t => { if (t.type === 'income') bal += t.amount; else bal -= t.amount; });
+    state.kopilka.balance = bal;
+  }
+}
+
+// ═══════════════════════════════════════════
+// SYNC: WRITE TO SHEETS
+// ═══════════════════════════════════════════
+
+async function writeKopilkaToSheets() {
+  const header = [['id','тип','название','сумма','оплачено','isCredit','балансПосле']];
+  const rows = state.kopilka.timeline.map(t => [
+    t.id, t.type, t.name, t.amount,
+    t.paid ? 'TRUE' : 'FALSE',
+    t.isCredit ? 'TRUE' : 'FALSE',
+    t.pastBal !== undefined ? t.pastBal : ''
+  ]);
+  await sheetsRequest('CLEAR', `${SH_KOPILKA}!A1:G500`);
+  await sheetsRequest('PUT', `${SH_KOPILKA}!A1`, { range:`${SH_KOPILKA}!A1`, majorDimension:'ROWS', values: [...header, ...rows] });
+}
+
+async function writeBPToSheets() {
+  const header = [['название','сумма','день']];
+  const rows = state.basePayments.map(bp => [bp.name, bp.amount, bp.day]);
+  await sheetsRequest('CLEAR', `${SH_BP}!A1:C100`);
+  await sheetsRequest('PUT', `${SH_BP}!A1`, { range:`${SH_BP}!A1`, majorDimension:'ROWS', values: [...header, ...rows] });
+}
+
+// ─── Write only paid status columns for a period row ──────────────────────
+// We never overwrite names/amounts — only the paid (TRUE/FALSE) columns.
+// Paid status is in col E, H, K, N... (every 3rd starting at col 5 = index 4)
+async function writePeriodRow(periodIdx) {
+  if (!gAccessToken) return;
+  const p = state.periods[periodIdx];
+  const sheetRow = periodIdx + 1; // 1-indexed, no header row
+
+  if (!p.expenses.length) return;
+
+  // Build batch update: one range per paid-status cell
+  const data = p.expenses.map((e, i) => {
+    // col index: expenses start at C(2), each expense is 3 cols wide
+    // paid col is the 3rd of each triplet: index 2 + i*3 + 2 = 4 + i*3
+    const colIdx = 4 + i * 3; // 0-based
+    const colLetter = colIndexToLetter(colIdx);
+    return {
+      range: `${SH_PERIODS}!${colLetter}${sheetRow}`,
+      majorDimension: 'ROWS',
+      values: [[e.paid ? 'TRUE' : 'FALSE']]
+    };
+  });
+
+  await sheetsRequest('BATCH_UPDATE', null, {
+    valueInputOption: 'USER_ENTERED',
+    data
+  });
+}
+
+function colIndexToLetter(idx) {
+  // 0=A, 1=B, ... 25=Z, 26=AA, etc.
+  let result = '';
+  idx += 1; // 1-based
+  while (idx > 0) {
+    const rem = (idx - 1) % 26;
+    result = String.fromCharCode(65 + rem) + result;
+    idx = Math.floor((idx - 1) / 26);
+  }
+  return result;
+}
+
+// ─── Debounced sync wrapper ────────────────────────────────────────────────
+let syncTimer = null;
+function scheduleSync(writeFn) {
+  if (!gAccessToken) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(async () => {
+    setSyncStatus('syncing','сохранение...');
+    try {
+      await writeFn();
+      setSyncStatus('connected','синхронизировано');
+    } catch(e) {
+      setSyncStatus('error','ошибка записи');
+      showToast('❌ Ошибка записи в таблицу');
+    }
+  }, 800);
+}
+
+async function manualSync() {
+  if (!gAccessToken) { signIn(); return; }
+  setSyncStatus('syncing','синхронизация...');
+  try {
+    await syncFromSheets();
+    setSyncStatus('connected','синхронизировано');
+    showToast('🔄 Данные обновлены!');
+    renderPeriod();
+    if (curTab === 'kopilka') renderKopilka();
+    if (curTab === 'settings') renderSettings();
+  } catch(e) {
+    setSyncStatus('error','ошибка');
+    showToast('❌ ' + (e.message || 'Ошибка синхронизации'));
+  }
+}
+
+// ═══════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════
+function fmt(n){return Math.round(n).toLocaleString('ru-RU')+' ₽';}
+let toastTimer=null;
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');if(toastTimer)clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),2200);}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+function openModal(id){document.getElementById(id).classList.add('open');}
+
+// ═══════════════════════════════════════════
+// TABS
+// ═══════════════════════════════════════════
+function switchTab(tab){
+  curTab=tab;
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(n=>n.classList.remove('active'));
+  document.getElementById('screen-'+tab).classList.add('active');
+  const nav=document.getElementById('nav-'+tab);if(nav)nav.classList.add('active');
+  if(tab==='kopilka')renderKopilka();
+  if(tab==='periods')renderPeriod();
+  if(tab==='settings')renderSettings();
+}
+
+// ═══════════════════════════════════════════
+// PERIODS
+// ═══════════════════════════════════════════
+function changePeriod(dir){
+  const ni=state.currentIdx+dir;
+  if(ni<0||ni>=state.periods.length)return;
+  state.currentIdx=ni;saveState();renderPeriod();
+}
+
+function renderPeriod(){
+  const p=state.periods[state.currentIdx];
+  document.getElementById('period-name').textContent=p.name;
+  document.getElementById('hero-income').textContent=fmt(p.income);
+  const totalExp=p.expenses.reduce((s,e)=>s+e.amount,0);
+  const paidExp=p.expenses.filter(e=>e.paid).reduce((s,e)=>s+e.amount,0);
+  const leftover=p.income-totalExp;
+  document.getElementById('hero-exp').textContent=fmt(totalExp);
+  document.getElementById('hero-paid').textContent=fmt(paidExp);
+  const le=document.getElementById('hero-left');
+  le.textContent=fmt(leftover);
+  le.className='hero-stat-val '+(leftover<0?'coral':'yellow');
+  const pct=totalExp>0?Math.round(paidExp/totalExp*100):0;
+  document.getElementById('prog-pct').textContent=pct+'%';
+  const fill=document.getElementById('prog-fill');
+  fill.style.width=Math.min(pct,100)+'%';
+  fill.className='prog-fill'+(pct>=100?' danger':pct>=70?' warn':'');
+  document.getElementById('btn-prev').disabled=state.currentIdx===0;
+  document.getElementById('btn-next').disabled=state.currentIdx===state.periods.length-1;
+  document.getElementById('mk-val').textContent=fmt(state.kopilka.balance);
+
+  const isFuture=!isCurrentOrPastPeriod(state.currentIdx);
+  const list=document.getElementById('exp-list');list.innerHTML='';
+
+  if(isFuture){
+    const notice=document.createElement('div');
+    notice.style.cssText='margin:0 0 12px;padding:10px 16px;background:var(--yellow-light);border-radius:var(--rs);font-size:13px;font-weight:600;color:#B8860B;display:flex;align-items:center;gap:8px;';
+    notice.innerHTML='⏳ Этот период ещё не наступил — отметка недоступна';
+    list.appendChild(notice);
+  }
+  if(!p.expenses.length){
+    const empty=document.createElement('div');
+    empty.innerHTML='<div class="empty-state"><div class="empty-ico">🎉</div><div class="empty-txt">Расходов нет</div></div>';
+    list.appendChild(empty);return;
+  }
+  p.expenses.forEach((exp,i)=>{
+    const el=document.createElement('div');
+    el.className='exp-item'+(exp.paid?' paid':'')+(isFuture?' future-locked':'');
+    el.innerHTML=`
+      <div class="exp-check ${isFuture?'locked':''}" ${isFuture?'':`onclick="toggleExp(${i})"`}>${exp.paid?'✓':(isFuture?'🔒':'')}</div>
+      <div class="exp-info"><div class="exp-name">${exp.name}</div></div>
+      <div class="exp-amt">${fmt(exp.amount)}</div>
+      <div class="exp-actions">
+        <button class="exp-btn" onclick="openEditExp(${i})">✏️</button>
+        <button class="exp-btn del" onclick="deleteExp(${i})">✕</button>
+      </div>`;
+    list.appendChild(el);
+  });
+}
+
+const MONTH_MAP={'январь':0,'февраль':1,'март':2,'апрель':3,'май':4,'июнь':5,'июль':6,'август':7,'сентябрь':8,'октябрь':9,'ноябрь':10,'декабрь':11};
+function getPeriodDate(name){
+  const parts=name.trim().split(' ');const month=MONTH_MAP[parts[0]];const day=parseInt(parts[1]);
+  if(month===undefined||isNaN(day))return null;
+  const now=new Date();let year=now.getFullYear();const testDate=new Date(year,month,day);
+  const sixMonths=180*24*3600*1000;
+  if(testDate-now>sixMonths)year--;else if(now-testDate>sixMonths)year++;
+  return new Date(year,month,day);
+}
+function isCurrentOrPastPeriod(idx){
+  const p=state.periods[idx];const pd=getPeriodDate(p.name);if(!pd)return true;
+  const today=new Date();today.setHours(0,0,0,0);return pd<=today;
+}
+
+function toggleExp(i){
+  if(!isCurrentOrPastPeriod(state.currentIdx)){showToast('⏳ Этот период ещё не наступил');return;}
+  const p=state.periods[state.currentIdx];const exp=p.expenses[i];
+  const isKop=exp.name.toLowerCase().includes('копилк');
+  exp.paid=!exp.paid;
+  if(isKop){
+    if(exp.paid){
+      state.kopilka.balance+=exp.amount;
+      const newEntry={id:'kop_'+Date.now(),type:'income',name:'В копилку ('+p.name+')',amount:exp.amount,paid:true,isCredit:false,pastBal:state.kopilka.balance};
+      const firstUnpaidIdx=state.kopilka.timeline.findIndex(t=>!t.paid);
+      if(firstUnpaidIdx===-1)state.kopilka.timeline.push(newEntry);
+      else state.kopilka.timeline.splice(firstUnpaidIdx,0,newEntry);
+      showToast('💰 +'+fmt(exp.amount)+' в копилку!');
+    }else{
+      state.kopilka.balance-=exp.amount;
+      state.kopilka.timeline=state.kopilka.timeline.filter(t=>!(t.name==='В копилку ('+p.name+')'&&t.amount===exp.amount&&t.paid));
+      showToast('↩️ Убрано из копилки');
+    }
+    document.getElementById('mk-val').textContent=fmt(state.kopilka.balance);
+    scheduleSync(()=>Promise.all([writePeriodRow(state.currentIdx), writeKopilkaToSheets()]));
+  }else{
+    showToast(exp.paid?'✅ Оплачено!':'↩️ Не оплачено');
+    scheduleSync(()=>writePeriodRow(state.currentIdx));
+  }
+  saveState();renderPeriod();
+}
+
+function deleteExp(i){
+  if(!confirm('Удалить расход?'))return;
+  state.periods[state.currentIdx].expenses.splice(i,1);
+  saveState();renderPeriod();showToast('🗑️ Удалено');
+  scheduleSync(()=>writePeriodRow(state.currentIdx));
+}
+
+function openAddExpense(){
+  editExpIdx=null;
+  document.getElementById('modal-exp-title').textContent='Новый расход';
+  document.getElementById('exp-name-in').value='';
+  document.getElementById('exp-amt-in').value='';
+  openModal('modal-expense');
+  setTimeout(()=>document.getElementById('exp-name-in').focus(),300);
+}
+function openEditExp(i){
+  editExpIdx=i;const e=state.periods[state.currentIdx].expenses[i];
+  document.getElementById('modal-exp-title').textContent='Изменить расход';
+  document.getElementById('exp-name-in').value=e.name;
+  document.getElementById('exp-amt-in').value=e.amount;
+  openModal('modal-expense');
+}
+function saveExpense(){
+  const name=document.getElementById('exp-name-in').value.trim();
+  const amount=parseFloat(document.getElementById('exp-amt-in').value);
+  if(!name||isNaN(amount)||amount<=0){showToast('⚠️ Заполни поля');return;}
+  const p=state.periods[state.currentIdx];
+  if(editExpIdx!==null){p.expenses[editExpIdx].name=name;p.expenses[editExpIdx].amount=amount;showToast('✏️ Изменено!');}
+  else{p.expenses.push({name,amount,paid:false});showToast('✅ Добавлено!');}
+  saveState();closeModal('modal-expense');renderPeriod();
+  scheduleSync(()=>writePeriodRow(state.currentIdx));
+}
+
+function openEditIncome(){
+  document.getElementById('income-in').value=state.periods[state.currentIdx].income;
+  openModal('modal-income');
+  setTimeout(()=>document.getElementById('income-in').select(),300);
+}
+function saveIncome(){
+  const v=parseFloat(document.getElementById('income-in').value);
+  if(isNaN(v)||v<0){showToast('⚠️ Некорректная сумма');return;}
+  state.periods[state.currentIdx].income=v;
+  saveState();closeModal('modal-income');renderPeriod();showToast('💸 Сумма обновлена!');
+  scheduleSync(()=>writePeriodRow(state.currentIdx));
+}
+
+// ═══════════════════════════════════════════
+// KOPILKA
+// ═══════════════════════════════════════════
+function renderKopilka(showAllHistory){
+  document.getElementById('kop-balance').textContent=fmt(state.kopilka.balance);
+  const tl=state.kopilka.timeline;
+  const container=document.getElementById('kop-timeline');container.innerHTML='';
+  const pastItems=tl.filter(t=>t.paid);
+  const futureItems=tl.filter(t=>!t.paid);
+  let runBal=state.kopilka.balance;
+  const futureWithBal=futureItems.map(item=>{
+    const balBefore=runBal;
+    if(item.type==='income')runBal+=item.amount;else runBal-=item.amount;
+    return{...item,balBefore,balAfter:runBal};
+  });
+  if(pastItems.length){
+    const HIST_LIMIT=3;const showAll=showAllHistory===true;
+    const visiblePast=showAll?pastItems:pastItems.slice(-HIST_LIMIT);
+    const hiddenCount=pastItems.length-HIST_LIMIT;
+    const hdr=document.createElement('div');hdr.className='tl-section-hdr';
+    hdr.innerHTML='История <span style="font-size:10px;opacity:.6;font-family:\'Nunito\';text-transform:none;font-weight:600;letter-spacing:0">'+pastItems.length+' операций</span>';
+    container.appendChild(hdr);
+    if(!showAll&&hiddenCount>0){
+      const btn=document.createElement('button');
+      btn.style.cssText='display:block;width:calc(100% - 48px);margin:0 24px 8px;padding:10px;background:var(--white);border:2px dashed #D8D5E8;border-radius:var(--rs);font-family:\'Nunito\',sans-serif;font-size:13px;font-weight:700;color:var(--ink-muted);cursor:pointer;';
+      btn.textContent='↑ Показать всю историю ('+hiddenCount+' скрыто)';
+      btn.onclick=()=>renderKopilka(true);container.appendChild(btn);
+    }
+    visiblePast.forEach(item=>container.appendChild(makeTlItem(item,'past',null,false)));
+    if(showAll&&hiddenCount>0){
+      const btn=document.createElement('button');
+      btn.style.cssText='display:block;width:calc(100% - 48px);margin:6px 24px 0;padding:10px;background:var(--white);border:2px dashed #D8D5E8;border-radius:var(--rs);font-family:\'Nunito\',sans-serif;font-size:13px;font-weight:700;color:var(--ink-muted);cursor:pointer;';
+      btn.textContent='↓ Свернуть историю';btn.onclick=()=>renderKopilka(false);container.appendChild(btn);
+    }
+  }
+  if(futureItems.length){
+    const hdr=document.createElement('div');hdr.className='tl-section-hdr';
+    hdr.style.marginTop=pastItems.length?'10px':'0';hdr.textContent='Планируется';container.appendChild(hdr);
+    futureWithBal.forEach(item=>{
+      const isShort=item.type==='expense'&&item.isCredit&&item.balBefore<item.amount;
+      container.appendChild(makeTlItem(item,'future',item.balAfter,isShort));
+    });
+  }
+}
+
+function makeTlItem(item,section,balAfter,isShort){
+  const el=document.createElement('div');
+  el.className='tl-item '+section+(isShort?' danger-row':'');
+  const dotClass=`tl-dot ${item.type==='income'?'inc':'exp'} ${section}`;
+  const dotSymbol=item.type==='income'?'↑':'↓';
+  const amtClass=`tl-amt ${item.type==='income'?'inc':'exp'} ${section}`;
+  const amtSign=item.type==='income'?'+':'−';
+  let balHtml='';
+  if(section==='past'&&item.pastBal!==undefined)balHtml=`<div class="tl-bal ok" style="color:#aaa">→ ${fmt(item.pastBal)}</div>`;
+  else if(section==='future'&&balAfter!==null){const balOk=balAfter>=0;const shortage=balOk?'':' ('+fmt(Math.abs(balAfter))+' не хватает)';balHtml=`<div class="tl-bal ${balOk?'ok':'warn'}">→ ${fmt(balAfter)}${shortage}</div>`;}
+  let rightHtml='';
+  if(item.isCredit&&section==='future'){
+    rightHtml=`<div class="tl-right-col"><div class="${amtClass}">${amtSign}${fmt(item.amount)}</div></div>${isShort?'<div class="tl-warn-icon" title="Не хватает денег">⚠️</div>':''}<button class="tl-check unpaid" onclick="toggleTlItem('${item.id}')">○</button>`;
+  }else if(item.isCredit&&section==='past'){
+    rightHtml=`<div class="${amtClass}">${amtSign}${fmt(item.amount)}</div><div class="tl-check paid" style="cursor:default;pointer-events:none">✓</div>`;
+  }else{rightHtml=`<div class="${amtClass}">${amtSign}${fmt(item.amount)}</div>`;}
+  el.innerHTML=`<div class="${dotClass}">${dotSymbol}</div><div class="tl-info"><div class="tl-name">${item.name}</div>${balHtml}</div><div class="tl-right">${rightHtml}</div>`;
+  return el;
+}
+
+function toggleTlItem(id){
+  const item=state.kopilka.timeline.find(t=>t.id===id);
+  if(!item||!item.isCredit)return;
+  item.paid=!item.paid;
+  if(item.paid){state.kopilka.balance-=item.amount;showToast('💸 '+fmt(item.amount)+' снято — кредит оплачен');}
+  else{state.kopilka.balance+=item.amount;showToast('↩️ Платёж отменён — возвращено в копилку');}
+  saveState();renderKopilka();
+  document.getElementById('mk-val').textContent=fmt(state.kopilka.balance);
+  scheduleSync(()=>writeKopilkaToSheets());
+}
+
+function openKopilkaOp(type){
+  kopOpType=type;
+  document.getElementById('modal-kop-title').textContent=type==='add'?'+ Пополнить копилку':'− Снять из копилки';
+  document.getElementById('kop-amt-in').value='';document.getElementById('kop-comment-in').value='';
+  openModal('modal-kop');setTimeout(()=>document.getElementById('kop-amt-in').focus(),300);
+}
+function saveKopOp(){
+  const a=parseFloat(document.getElementById('kop-amt-in').value);
+  const c=document.getElementById('kop-comment-in').value.trim()||(kopOpType==='add'?'Пополнение':'Снятие');
+  if(isNaN(a)||a<=0){showToast('⚠️ Введи сумму');return;}
+  const isAdd=kopOpType==='add';
+  const newId='manual_'+Date.now();
+  const newItem={id:newId,type:isAdd?'income':'expense',name:c,amount:a,paid:true,isCredit:false};
+  const firstUnpaidIdx=state.kopilka.timeline.findIndex(t=>!t.paid);
+  if(firstUnpaidIdx===-1)state.kopilka.timeline.push(newItem);
+  else state.kopilka.timeline.splice(firstUnpaidIdx,0,newItem);
+  if(isAdd)state.kopilka.balance+=a;else state.kopilka.balance-=a;
+  newItem.pastBal=state.kopilka.balance;
+  saveState();closeModal('modal-kop');renderKopilka();
+  document.getElementById('mk-val').textContent=fmt(state.kopilka.balance);
+  showToast(isAdd?'💰 Добавлено в копилку!':'💸 Снято из копилки!');
+  scheduleSync(()=>writeKopilkaToSheets());
+}
+
+// ═══════════════════════════════════════════
+// SETTINGS
+// ═══════════════════════════════════════════
+function renderSettings(){
+  document.getElementById('salary-input').value=state.salary||150000;
+  updateSalaryPreview();
+  renderBPList();
+  renderAuthCard();
+}
+
+function renderAuthCard(){
+  const el=document.getElementById('auth-card-content');
+  if(gAccessToken&&gUserEmail){
+    el.innerHTML=`
+      <div class="auth-status-row">
+        <div>
+          <div class="set-row-lbl">✅ Подключено</div>
+          <div class="auth-sub">${gUserEmail}</div>
+        </div>
+      </div>
+      <div class="auth-status-row">
+        <div>
+          <div class="set-row-lbl">Таблица</div>
+          <div class="auth-sub">Мои траты 2025</div>
+        </div>
+        <a href="https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}" target="_blank" style="font-size:12px;color:var(--violet);font-weight:700;text-decoration:none">Открыть →</a>
+      </div>
+      <button class="auth-btn disconnect" style="margin-top:14px" onclick="signOut()">Отключить Google аккаунт</button>`;
+  } else {
+    el.innerHTML=`
+      <div class="set-row-lbl" style="margin-bottom:6px">Синхронизация</div>
+      <div class="auth-sub" style="font-size:13px;color:var(--ink-muted);line-height:1.5;margin-bottom:14px">Подключи Google аккаунт, чтобы данные сохранялись в таблице и были доступны с любого устройства</div>
+      <button class="auth-btn google" onclick="signIn()">🔑 Войти через Google</button>`;
+  }
+}
+
+function updateSalaryPreview(){
+  const sal=parseFloat(document.getElementById('salary-input').value)||150000;
+  const rows=genSalaryPreview(sal);
+  document.getElementById('sal-preview').innerHTML='<div class="sal-preview-title">Расчёт ближайших периодов</div>'+
+    rows.map(r=>`<div class="sal-row"><span class="sal-row-lbl">${r.label}</span><span class="sal-row-val" style="color:${r.note==='avans'?'var(--violet)':'var(--green)'}">${fmt(r.val)}</span></div>`).join('');
+}
+document.getElementById('salary-input').addEventListener('input',updateSalaryPreview);
+
+function saveSalary(){
+  const s=parseFloat(document.getElementById('salary-input').value);
+  if(isNaN(s)||s<=0){showToast('⚠️ Некорректный оклад');return;}
+  state.salary=s;saveState();showToast('✅ Оклад сохранён — '+fmt(s));
+}
+
+// ═══════════════════════════════════════════
+// BASE PAYMENTS
+// ═══════════════════════════════════════════
+function renderBPList(){
+  const container=document.getElementById('bp-list');container.innerHTML='';
+  if(!state.basePayments.length){container.innerHTML='<div class="empty-state"><div class="empty-ico">📋</div><div class="empty-txt">Базовых платежей нет</div></div>';return;}
+  [5,20].forEach(day=>{
+    const items=state.basePayments.filter(bp=>bp.day===day);if(!items.length)return;
+    const hdr=document.createElement('div');
+    hdr.style.cssText='font-size:11px;font-weight:700;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.5px;margin:10px 0 6px;';
+    hdr.textContent=day===5?'📅 5 числа':'📅 20 числа';container.appendChild(hdr);
+    items.forEach(bp=>{
+      const idx=state.basePayments.indexOf(bp);
+      const el=document.createElement('div');el.className='bp-item';
+      el.innerHTML=`<div class="bp-badge ${day===5?'d5':'d20'}">${day}</div><div class="bp-info"><div class="bp-name">${bp.name}</div><div class="bp-sub">${day} числа каждого месяца</div></div><div class="bp-amt">${fmt(bp.amount)}</div><div class="bp-actions"><button class="bp-btn" onclick="openEditBP(${idx})">✏️</button><button class="bp-btn del" onclick="deleteBP(${idx})">✕</button></div>`;
+      container.appendChild(el);
+    });
+  });
+}
+
+function openAddBP(){editBPIdx=null;bpDay=5;document.getElementById('modal-bp-title').textContent='Новый базовый платёж';document.getElementById('bp-name-in').value='';document.getElementById('bp-amt-in').value='';selectBPDay(5);openModal('modal-bp');setTimeout(()=>document.getElementById('bp-name-in').focus(),300);}
+function openEditBP(idx){editBPIdx=idx;const bp=state.basePayments[idx];document.getElementById('modal-bp-title').textContent='Изменить базовый платёж';document.getElementById('bp-name-in').value=bp.name;document.getElementById('bp-amt-in').value=bp.amount;bpDay=bp.day;selectBPDay(bp.day);openModal('modal-bp');}
+function selectBPDay(day){bpDay=day;document.getElementById('bp-seg-5').className='modal-seg-btn'+(day===5?' active':'');document.getElementById('bp-seg-20').className='modal-seg-btn'+(day===20?' active':'');}
+function saveBP(){
+  const name=document.getElementById('bp-name-in').value.trim();
+  const amount=parseFloat(document.getElementById('bp-amt-in').value);
+  if(!name||isNaN(amount)||amount<=0){showToast('⚠️ Заполни поля');return;}
+  if(editBPIdx!==null){
+    const oldBP=state.basePayments[editBPIdx];const oldName=oldBP.name;const oldAmt=oldBP.amount;const oldDay=oldBP.day;
+    oldBP.name=name;oldBP.amount=amount;oldBP.day=bpDay;
+    let updatedCount=0;
+    state.periods.forEach(p=>{const periodDay=p.name.match(/\d+$/)?.[0];if(parseInt(periodDay)===oldDay||bpDay===oldDay){p.expenses.forEach(exp=>{if(!exp.paid&&exp.name===oldName&&exp.amount===oldAmt){exp.name=name;exp.amount=amount;updatedCount++;}});}});
+    saveState();closeModal('modal-bp');renderBPList();renderPeriod();
+    showToast(`✅ Обновлено${updatedCount>0?' в '+updatedCount+' периодах':''}!`);
+    scheduleSync(()=>writeBPToSheets());
+  }else{
+    const id='bp_'+Date.now();state.basePayments.push({id,name,amount,day:bpDay});
+    saveState();closeModal('modal-bp');renderBPList();showToast('✅ Базовый платёж добавлен!');
+    scheduleSync(()=>writeBPToSheets());
+  }
+}
+function deleteBP(idx){
+  if(!confirm('Удалить базовый платёж? Из существующих периодов он не удалится.'))return;
+  state.basePayments.splice(idx,1);saveState();renderBPList();showToast('🗑️ Удалён');
+  scheduleSync(()=>writeBPToSheets());
+}
+
+function resetData(){
+  if(!confirm('Сбросить все данные к начальным? Это нельзя отменить.'))return;
+  localStorage.removeItem('finance_v9');
+  state=loadState();saveState();renderPeriod();showToast('🔄 Данные сброшены');
+}
+
+// ═══════════════════════════════════════════
+// MODAL HELPERS
+// ═══════════════════════════════════════════
+document.querySelectorAll('.modal-ov').forEach(o=>{o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');});});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){['modal-expense','modal-income','modal-kop','modal-bp'].forEach(closeModal);}
+  if(e.key==='Enter'){
+    if(document.getElementById('modal-expense').classList.contains('open'))saveExpense();
+    if(document.getElementById('modal-income').classList.contains('open'))saveIncome();
+    if(document.getElementById('modal-kop').classList.contains('open'))saveKopOp();
+    if(document.getElementById('modal-bp').classList.contains('open'))saveBP();
+  }
+});
+
+// ═══════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════
+async function init() {
+  // Hide loading immediately — show local data right away
+  document.getElementById('loading-ov').classList.add('hidden');
+  renderPeriod();
+  renderAuthCard();
+  // Google auth initialises in background
+  initGoogleAuth();
+}
+
+init();
+</script>
+</body>
+</html>
