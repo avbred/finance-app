@@ -748,11 +748,19 @@ async function syncFromSheets() {
         if (oldPeriod) {
           oldPeriod.expenses.forEach(e => { if (!e.manual) basePaidMap[e.name] = e.paid; });
         }
-        const baseExpenses = bps.map(bp => ({
-          name: bp.name, amount: bp.amount,
-          paid: basePaidMap[bp.name] || false,
-          manual: false
-        }));
+        const baseExpenses = bps.map(bp => {
+          // Check if this BP was manually overridden in the sheet for this period
+          const manualOverride = p.manualExpenses.find(e => e.name === bp.name);
+          if (manualOverride) {
+            // Use the manual version (different amount) — it's already in manualExpenses
+            return null;
+          }
+          return {
+            name: bp.name, amount: bp.amount,
+            paid: basePaidMap[bp.name] || false,
+            manual: false
+          };
+        }).filter(Boolean);
         p.expenses = [...baseExpenses, ...p.manualExpenses];
         delete p.manualExpenses;
       });
@@ -1062,8 +1070,17 @@ function saveExpense(){
   const amount=parseFloat(document.getElementById('exp-amt-in').value);
   if(!name||isNaN(amount)||amount<=0){showToast('⚠️ Заполни поля');return;}
   const p=state.periods[state.currentIdx];
-  if(editExpIdx!==null){p.expenses[editExpIdx].name=name;p.expenses[editExpIdx].amount=amount;showToast('✏️ Изменено!');}
-  else{p.expenses.push({name,amount,paid:false,manual:true});showToast('✅ Добавлено!');}
+  if(editExpIdx!==null){
+    const exp=p.expenses[editExpIdx];
+    exp.name=name;
+    exp.amount=amount;
+    // If this was a base payment and something changed — mark as manual so it saves to sheet
+    if(!exp.manual) exp.manual=true;
+    showToast('✏️ Изменено!');
+  } else {
+    p.expenses.push({name,amount,paid:false,manual:true});
+    showToast('✅ Добавлено!');
+  }
   saveState();closeModal('modal-expense');renderPeriod();
   scheduleSync(()=>writePeriodRow(state.currentIdx));
 }
