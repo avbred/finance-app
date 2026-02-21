@@ -753,21 +753,41 @@ async function syncFromSheets() {
     }
 
     if (periods.length > 0) {
-      // For each period: add any base payments that are missing
-      // (either period has no expenses yet, or new BP was added since last sync)
+      // Sync base payments with each period:
+      // 1. Add missing base payments
+      // 2. Remove unpaid base payments that were deleted from the BP list
       const rowsToWrite = [];
       periods.forEach((p, idx) => {
         const day = parseInt(p.name.match(/\d+$/)?.[0]) || 0;
         const bps = state.basePayments.filter(bp => bp.day === day);
+        const bpNames = new Set(bps.map(bp => bp.name));
         let changed = false;
+
+        // Remove unpaid expenses that are no longer in base payments
+        // (only remove if they were a base payment — i.e. same name exists in BP list for this day)
+        // We track which names were ever base payments by checking if they match any BP name
+        const before = p.expenses.length;
+        p.expenses = p.expenses.filter(e => {
+          // Keep if: paid, OR not a base payment name at all
+          // Remove if: unpaid AND was in BP list but is no longer there
+          const wasBasePay = state.basePayments.some(bp => bp.name === e.name) ||
+                             bpNames.has(e.name);
+          if (!e.paid && wasBasePay && !bpNames.has(e.name)) {
+            changed = true;
+            return false; // remove
+          }
+          return true;
+        });
+
+        // Add missing base payments
         bps.forEach(bp => {
-          // Check if this base payment already exists in the period (by name)
           const exists = p.expenses.some(e => e.name === bp.name);
           if (!exists) {
             p.expenses.push({ name: bp.name, amount: bp.amount, paid: false });
             changed = true;
           }
         });
+
         if (changed) rowsToWrite.push(idx);
       });
 
@@ -796,13 +816,15 @@ async function syncFromSheets() {
   const kopResp = await sheetsRequest('GET', `${SH_KOPILKA}!A1:G500`);
   const kopRows = kopResp.values || [];
   if (kopRows.length > 0) {
-    const timeline = kopRows.filter(r=>r[0]&&r[2]).map(r=>({
-      id:r[0]||'', type:r[1]||'income', name:r[2]||'',
-      amount:parseFloat(String(r[3]||'').replace(/\s/g,''))||0,
-      paid:(r[4]||'').toString().toUpperCase()==='TRUE',
-      isCredit:(r[5]||'').toString().toUpperCase()==='TRUE',
-      pastBal:r[6]?parseFloat(r[6]):undefined,
-    }));
+    const timeline = kopRows
+      .filter(r => r[0] && r[2] && r[0] !== 'id' && r[2] !== 'название') // skip header
+      .map(r=>({
+        id:r[0]||'', type:r[1]||'income', name:r[2]||'',
+        amount:parseFloat(String(r[3]||'').replace(/\s/g,''))||0,
+        paid:(r[4]||'').toString().toUpperCase()==='TRUE',
+        isCredit:(r[5]||'').toString().toUpperCase()==='TRUE',
+        pastBal:r[6]?parseFloat(r[6]):undefined,
+      }));
     if (timeline.length > 0) {
       state.kopilka.timeline = timeline;
       recalcKopilkaBalance();
