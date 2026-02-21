@@ -741,60 +741,36 @@ async function syncFromSheets() {
       if (!row[0] || !row[1]) continue;
       const name   = row[0].trim();
       const income = parseFloat(String(row[1]).replace(/\s/g,'')) || 0;
-      const expenses = [];
+      // Only read MANUAL expenses from Периоды sheet (not base payments)
+      const manualExpenses = [];
       for (let c = 2; c + 1 < row.length; c += 3) {
         const expName = (row[c] || '').trim();
         const expAmt  = parseFloat(String(row[c+1] || '').replace(/\s/g,''));
         const expPaid = (row[c+2] || '').toString().toUpperCase() === 'TRUE';
         if (expName && !isNaN(expAmt) && expAmt > 0)
-          expenses.push({ name: expName, amount: expAmt, paid: expPaid });
+          manualExpenses.push({ name: expName, amount: expAmt, paid: expPaid, manual: true });
       }
-      periods.push({ name, income, expenses });
+      periods.push({ name, income, manualExpenses });
     }
 
     if (periods.length > 0) {
-      // Sync base payments with each period:
-      // 1. Add missing base payments
-      // 2. Remove unpaid base payments that were deleted from the BP list
-      const rowsToWrite = [];
-      periods.forEach((p, idx) => {
+      // Build full expense list: base payments first, then manual
+      periods.forEach(p => {
         const day = parseInt(p.name.match(/\d+$/)?.[0]) || 0;
         const bps = state.basePayments.filter(bp => bp.day === day);
-        const bpNames = new Set(bps.map(bp => bp.name));
-        let changed = false;
-
-        // Remove unpaid expenses that are NOT in the current BP list for this day's period
-        // Logic: if an expense is unpaid AND its name doesn't match any current BP for this day
-        // AND it doesn't look like a manually-added expense (i.e. it WAS a BP before)
-        // We identify "was a BP" by checking against ALL base payments (any day),
-        // since we want to remove only things that were auto-added by BP sync
-        const allBPNames = new Set(state.basePayments.map(bp => bp.name));
-        p.expenses = p.expenses.filter(e => {
-          // Keep paid expenses always
-          if (e.paid) return true;
-          // Keep if name is in current day's BP list
-          if (bpNames.has(e.name)) return true;
-          // Remove if name was in ANY BP list (it was auto-added) but no longer in this day's list
-          if (allBPNames.has(e.name)) {
-            // It exists as a BP for a different day — keep it only if day matches
-            const bpForThisDay = bps.some(bp => bp.name === e.name);
-            if (!bpForThisDay) { changed = true; return false; }
-          }
-          // If name not in any BP at all — it was manually added, keep it
-          if (!allBPNames.has(e.name)) return true;
-          return true;
-        });
-
-        // Add missing base payments
-        bps.forEach(bp => {
-          const exists = p.expenses.some(e => e.name === bp.name);
-          if (!exists) {
-            p.expenses.push({ name: bp.name, amount: bp.amount, paid: false });
-            changed = true;
-          }
-        });
-
-        if (changed) rowsToWrite.push(idx);
+        // Base payments: preserve paid status if period already existed
+        const oldPeriod = state.periods.find(op => op.name === p.name);
+        const basePaidMap = {};
+        if (oldPeriod) {
+          oldPeriod.expenses.forEach(e => { if (!e.manual) basePaidMap[e.name] = e.paid; });
+        }
+        const baseExpenses = bps.map(bp => ({
+          name: bp.name, amount: bp.amount,
+          paid: basePaidMap[bp.name] || false,
+          manual: false
+        }));
+        p.expenses = [...baseExpenses, ...p.manualExpenses];
+        delete p.manualExpenses;
       });
 
       state.periods = periods;
@@ -811,10 +787,7 @@ async function syncFromSheets() {
         state.currentIdx = best;
       }
 
-      // Write auto-populated rows back so table has full data
-      for (const idx of rowsToWrite) {
-        await writePeriodRow(idx);
-      }
+      // No need to write back — base payments are NOT stored in Периоды sheet
     }
   }
 
@@ -863,7 +836,6 @@ function recalcKopilkaBalance() {
 // ═══════════════════════════════════════════
 
 async function writeKopilkaToSheets() {
-  const header = [['id','тип','название','сумма','оплачено','isCredit','балансПосле']];
   const rows = state.kopilka.timeline.map(t => [
     t.id, t.type, t.name, t.amount,
     t.paid ? 'TRUE' : 'FALSE',
@@ -871,7 +843,7 @@ async function writeKopilkaToSheets() {
     t.pastBal !== undefined ? t.pastBal : ''
   ]);
   await sheetsRequest('CLEAR', `${SH_KOPILKA}!A1:G500`);
-  await sheetsRequest('PUT', `${SH_KOPILKA}!A1`, { range:`${SH_KOPILKA}!A1`, majorDimension:'ROWS', values: [...header, ...rows] });
+  await sheetsRequest('PUT', `${SH_KOPILKA}!A1`, { range:`${SH_KOPILKA}!A1`, majorDimension:'ROWS', values: rows });
 }
 
 async function writeBPToSheets() {
@@ -881,13 +853,16 @@ async function writeBPToSheets() {
   await sheetsRequest('PUT', `${SH_BP}!A1`, { range:`${SH_BP}!A1`, majorDimension:'ROWS', values: [...header, ...rows] });
 }
 
-// ─── Write full period row to sheet (name, income, all expenses) ──────────
+// ─── Write period row: only income + manual expenses (base payments NOT stored in Периоды) ──
 async function writePeriodRow(periodIdx) {
   if (!gAccessToken) return;
   const p = state.periods[periodIdx];
-  const sheetRow = periodIdx + 1; // 1-indexed, no header row
+  const sheetRow = periodIdx + 1;
   const row = [p.name, p.income];
-  p.expenses.forEach(e => { row.push(e.name, e.amount, e.paid ? 'TRUE' : 'FALSE'); });
+  // Only write manual expenses to the sheet
+  p.expenses.filter(e => e.manual).forEach(e => {
+    row.push(e.name, e.amount, e.paid ? 'TRUE' : 'FALSE');
+  });
   await sheetsRequest('PUT', `${SH_PERIODS}!A${sheetRow}`, {
     range: `${SH_PERIODS}!A${sheetRow}`,
     majorDimension: 'ROWS',
@@ -1099,7 +1074,7 @@ function saveExpense(){
   if(!name||isNaN(amount)||amount<=0){showToast('⚠️ Заполни поля');return;}
   const p=state.periods[state.currentIdx];
   if(editExpIdx!==null){p.expenses[editExpIdx].name=name;p.expenses[editExpIdx].amount=amount;showToast('✏️ Изменено!');}
-  else{p.expenses.push({name,amount,paid:false});showToast('✅ Добавлено!');}
+  else{p.expenses.push({name,amount,paid:false,manual:true});showToast('✅ Добавлено!');}
   saveState();closeModal('modal-expense');renderPeriod();
   scheduleSync(()=>writePeriodRow(state.currentIdx));
 }
