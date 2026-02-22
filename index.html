@@ -535,7 +535,7 @@ const INIT_KOPILKA = {
 // ═══════════════════════════════════════════
 function loadState(){
   try{const s=localStorage.getItem('finance_v10');if(s)return JSON.parse(s);}catch(e){}
-  return{periods:[],kopilka:{entries:[],balance:0},basePayments:JSON.parse(JSON.stringify(INIT_BASE_PAYMENTS)),currentIdx:0,salary:150000};
+  return{periods:[],kopilka:{entries:[],balance:0},basePayments:JSON.parse(JSON.stringify(INIT_BASE_PAYMENTS)),currentIdx:0,salary:150000,excludedBPs:{}};
 }
 function saveState(){localStorage.setItem('finance_v10',JSON.stringify(state));}
 
@@ -769,13 +769,13 @@ async function syncFromSheets() {
         if (oldPeriod) {
           oldPeriod.expenses.forEach(e => { if (!e.manual) basePaidMap[e.name] = e.paid; });
         }
+        const excludedForPeriod = (state.excludedBPs && state.excludedBPs[p.name]) || [];
         const baseExpenses = bps.map(bp => {
+          // Skip if excluded for this period
+          if (excludedForPeriod.includes(bp.name)) return null;
           // Check if this BP was manually overridden in the sheet for this period
           const manualOverride = p.manualExpenses.find(e => e.name === bp.name);
-          if (manualOverride) {
-            // Use the manual version (different amount) — it's already in manualExpenses
-            return null;
-          }
+          if (manualOverride) return null;
           return {
             name: bp.name, amount: bp.amount,
             paid: basePaidMap[bp.name] || false,
@@ -1111,9 +1111,17 @@ function toggleExp(i){
 
 function deleteExp(i){
   if(!confirm('Удалить расход?'))return;
-  state.periods[state.currentIdx].expenses.splice(i,1);
+  const p = state.periods[state.currentIdx];
+  const exp = p.expenses[i];
+  // If base payment (not manual, not from kopilka) — record exclusion so it doesn't come back on sync
+  if(!exp.manual && !exp.fromKopilka){
+    if(!state.excludedBPs) state.excludedBPs = {};
+    if(!state.excludedBPs[p.name]) state.excludedBPs[p.name] = [];
+    if(!state.excludedBPs[p.name].includes(exp.name))
+      state.excludedBPs[p.name].push(exp.name);
+  }
+  p.expenses.splice(i,1);
   saveState();renderPeriod();showToast('🗑️ Удалено');
-  // Write immediately (no debounce) so deletion is reflected in table right away
   if(gAccessToken){
     setSyncStatus('syncing','сохранение...');
     writePeriodRow(state.currentIdx).then(()=>setSyncStatus('connected','синхронизировано')).catch(()=>setSyncStatus('error','ошибка записи'));
