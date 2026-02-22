@@ -1574,7 +1574,14 @@ function loadFromSheets(){
   state = loadState();
   setSyncStatus('syncing','загрузка...');
   syncFromSheets()
-    .then(()=>{ saveState(); renderPeriod(); setSyncStatus('connected','синхронизировано'); showToast('✅ Данные загружены из таблицы!'); })
+    .then(()=>{
+      saveState();
+      renderPeriod();
+      renderKopilka();
+      renderSettings();
+      setSyncStatus('connected','синхронизировано');
+      showToast('✅ Данные загружены из таблицы!');
+    })
     .catch(()=>{ setSyncStatus('error','ошибка'); showToast('❌ Ошибка загрузки'); });
 }
 
