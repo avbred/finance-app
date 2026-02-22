@@ -1203,6 +1203,44 @@ function saveExpense(){
     if(!exp.manual) exp.manual=true;
     showToast('✏️ Изменено!');
   } else {
+    const isKopilka = name.toLowerCase().includes('копилк');
+    if(isKopilka){
+      // Create entry in kopilka sheet instead of period sheet
+      const periodName = p.name.toLowerCase();
+      const stableId = 'k_' + periodName.replace(/\s+/g,'_') + '__в_копилку';
+      // Check if entry already exists for this period
+      const existing = (state.kopilka.entries||[]).find(e=>e.id===stableId);
+      if(existing){
+        existing.amount = amount;
+      } else {
+        if(!state.kopilka.entries) state.kopilka.entries=[];
+        // Insert before first unpaid entry
+        const firstUnpaidIdx = state.kopilka.entries.findIndex(e=>!e.paid);
+        const newEntry = {
+          id: stableId,
+          period: p.name,
+          typ: 'в копилку',
+          name: 'В копилку',
+          amount,
+          paid: false,
+          rowIndex: 0,
+        };
+        if(firstUnpaidIdx===-1) state.kopilka.entries.push(newEntry);
+        else state.kopilka.entries.splice(firstUnpaidIdx,0,newEntry);
+      }
+      recalcKopilkaBalance();
+      injectKopilkaIntoPeriods();
+      document.getElementById('mk-val').textContent=fmt(state.kopilka.balance);
+      showToast('✅ Добавлено в копилку!');
+      saveState();closeModal('modal-expense');renderPeriod();
+      if(gAccessToken){
+        setSyncStatus('syncing','сохранение...');
+        writeKopilkaToSheets()
+          .then(()=>setSyncStatus('connected','синхронизировано'))
+          .catch(()=>setSyncStatus('error','ошибка записи'));
+      }
+      return;
+    }
     p.expenses.push({name,amount,paid:false,manual:true});
     showToast('✅ Добавлено!');
   }
