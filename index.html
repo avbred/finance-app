@@ -812,15 +812,19 @@ async function syncFromSheets() {
   if (kopRows.length > 0) {
     const entries = kopRows
       .filter(r => r[0] && r[3] && r[0] !== 'период')
-      .map((r, i) => ({
-        id: 'k_' + i,
-        period: (r[0]||'').trim(),
-        typ: (r[1]||'').trim(),
-        name: (r[2]||'').trim(),
-        amount: parseFloat(String(r[3]||'').replace(/\s/g,''))||0,
-        paid: (r[4]||'').toString().toUpperCase() === 'TRUE',
-        rowIndex: i + 1,
-      }))
+      .map((r, i) => {
+        const period = (r[0]||'').trim();
+        const typ = (r[1]||'').trim();
+        const name = (r[2]||'').trim();
+        const stableId = 'k_' + period.toLowerCase().replace(/\s+/g,'_') + '__' + typ.toLowerCase().replace(/\s+/g,'_');
+        return {
+          id: stableId,
+          period, typ, name,
+          amount: parseFloat(String(r[3]||'').replace(/\s/g,''))||0,
+          paid: (r[4]||'').toString().toUpperCase() === 'TRUE',
+          rowIndex: i + 1,
+        };
+      })
       .filter(e => e.amount > 0);
     if (entries.length > 0) {
       state.kopilka.entries = entries;
@@ -888,12 +892,23 @@ async function writeKopilkaToSheets() {
 
 // Write only the paid status of one entry (by rowIndex)
 async function writeKopilkaRowPaid(entry) {
-  if (!gAccessToken) return;
+  if (!gAccessToken || !entry.rowIndex) return;
   const row = entry.rowIndex;
   await sheetsRequest('PUT', `${SH_KOPILKA}!E${row}`, {
     range: `${SH_KOPILKA}!E${row}`,
     majorDimension: 'ROWS',
     values: [[entry.paid ? 'TRUE' : 'FALSE']]
+  });
+}
+
+// Write only the amount of one entry (by rowIndex)
+async function writeKopilkaRowAmount(entry) {
+  if (!gAccessToken || !entry.rowIndex) return;
+  const row = entry.rowIndex;
+  await sheetsRequest('PUT', `${SH_KOPILKA}!D${row}`, {
+    range: `${SH_KOPILKA}!D${row}`,
+    majorDimension: 'ROWS',
+    values: [[entry.amount]]
   });
 }
 
@@ -1152,12 +1167,16 @@ function saveKopilkaEntryEdit(){
   if(curTab==='kopilka')renderKopilka();
   document.getElementById('mk-val').textContent=fmt(state.kopilka.balance);
   showToast('✅ Сумма обновлена!');
-  // Write immediately without debounce — full table rewrite
+  // Write only the changed cell immediately
   if(gAccessToken){
-    setSyncStatus('syncing','сохранение...');
-    writeKopilkaToSheets()
-      .then(()=>setSyncStatus('connected','синхронизировано'))
-      .catch(()=>setSyncStatus('error','ошибка записи'));
+    const editId=document.getElementById('kop-edit-id').value;
+    const target=(state.kopilka.entries||[]).find(e=>e.id===editId);
+    if(target){
+      setSyncStatus('syncing','сохранение...');
+      writeKopilkaRowAmount(target)
+        .then(()=>setSyncStatus('connected','синхронизировано'))
+        .catch(()=>setSyncStatus('error','ошибка записи'));
+    }
   }
 }
 function saveExpense(){
