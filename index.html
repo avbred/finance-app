@@ -770,6 +770,7 @@ async function syncFromSheets() {
           oldPeriod.expenses.forEach(e => { if (!e.manual) basePaidMap[e.name] = e.paid; });
         }
         const excludedForPeriod = (state.excludedBPs && state.excludedBPs[p.name.toLowerCase()]) || [];
+        console.log('excludedBPs for', p.name, ':', excludedForPeriod);
         const baseExpenses = bps.map(bp => {
           // Skip if excluded for this period
           if (excludedForPeriod.includes(bp.name)) return null;
@@ -1120,6 +1121,7 @@ function deleteExp(i){
     if(!state.excludedBPs[_epKey]) state.excludedBPs[_epKey] = [];
     if(!state.excludedBPs[_epKey].includes(exp.name))
       state.excludedBPs[_epKey].push(exp.name);
+    console.log('Saved exclusion:', _epKey, exp.name, state.excludedBPs);
   }
   p.expenses.splice(i,1);
   saveState();renderPeriod();showToast('🗑️ Удалено');
