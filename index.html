@@ -779,9 +779,17 @@ async function syncFromSheets() {
         // Base payments: preserve paid status if period already existed
         const oldPeriod = state.periods.find(op => op.name === p.name);
         const basePaidMap = {};
+        const manualPaidMap = {};
         if (oldPeriod) {
-          oldPeriod.expenses.forEach(e => { if (!e.manual) basePaidMap[e.name] = e.paid; });
+          oldPeriod.expenses.forEach(e => {
+            if (!e.manual && !e.fromKopilka) basePaidMap[e.name] = e.paid;
+            if (e.manual) manualPaidMap[e.name] = e.paid;
+          });
         }
+        // Restore paid status for manual expenses from table
+        p.manualExpenses.forEach(e => {
+          if (manualPaidMap[e.name] !== undefined) e.paid = manualPaidMap[e.name];
+        });
         const excludedForPeriod = (state.excludedBPs && state.excludedBPs[p.name.toLowerCase()]) || [];
         console.log('excludedBPs for', p.name, ':', excludedForPeriod);
         const baseExpenses = bps.map(bp => {
