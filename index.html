@@ -335,6 +335,10 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--ink);mi
       <div class="set-row">
         <div><div class="set-row-lbl">Мои финансы</div><div class="set-row-sub">Версия 2.1 · Google Sheets — источник правды</div></div>
       </div>
+      <div class="set-row" style="cursor:pointer" onclick="loadFromSheets()">
+        <div><div class="set-row-lbl" style="color:var(--violet)">Загрузить из таблицы</div><div class="set-row-sub">Сбросить локальные данные и загрузить из Google Sheets</div></div>
+        <span style="color:var(--violet)">›</span>
+      </div>
       <div class="set-row" style="cursor:pointer" onclick="resetData()">
         <div><div class="set-row-lbl" style="color:var(--coral)">Сбросить данные</div><div class="set-row-sub">Вернуть к начальным данным</div></div>
         <span style="color:var(--coral)">›</span>
@@ -1520,6 +1524,17 @@ function deleteBP(idx){
   if(!confirm('Удалить базовый платёж? Из существующих периодов он не удалится.'))return;
   state.basePayments.splice(idx,1);saveState();renderBPList();showToast('🗑️ Удалён');
   scheduleSync(()=>writeBPToSheets());
+}
+
+function loadFromSheets(){
+  if(!gAccessToken){ showToast('⚠️ Сначала авторизуйся'); return; }
+  if(!confirm('Загрузить данные из Google Sheets? Локальные данные будут перезаписаны.')) return;
+  localStorage.removeItem('finance_v10');
+  state = loadState();
+  setSyncStatus('syncing','загрузка...');
+  syncFromSheets()
+    .then(()=>{ saveState(); renderPeriod(); setSyncStatus('connected','синхронизировано'); showToast('✅ Данные загружены из таблицы!'); })
+    .catch(()=>{ setSyncStatus('error','ошибка'); showToast('❌ Ошибка загрузки'); });
 }
 
 function resetData(){
