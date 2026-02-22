@@ -1212,19 +1212,26 @@ function saveExpense(){
       if(existingIdx>=0){
         state.kopilka.entries[existingIdx].amount = amount;
       } else {
-        // Insert after last paid entry (before first unpaid)
-        const firstUnpaidIdx = state.kopilka.entries.findIndex(e=>!e.paid);
         const newEntry = {
           id: stableId,
           period: p.name,
           typ: 'в копилку',
-          name: 'В копилку',
+          name: p.name, // period name shows correctly in timeline
           amount,
           paid: false,
           rowIndex: 0,
         };
-        if(firstUnpaidIdx===-1) state.kopilka.entries.push(newEntry);
-        else state.kopilka.entries.splice(firstUnpaidIdx,0,newEntry);
+        // Insert in correct chronological position by period order
+        const periodOrder = state.periods.map(pp => pp.name.toLowerCase());
+        const newPeriodRank = periodOrder.indexOf(p.name.toLowerCase());
+        let insertAt = state.kopilka.entries.length;
+        for(let i = 0; i < state.kopilka.entries.length; i++){
+          const e = state.kopilka.entries[i];
+          if(e.paid) continue;
+          const eRank = periodOrder.indexOf((e.period||'').toLowerCase());
+          if(eRank > newPeriodRank){ insertAt = i; break; }
+        }
+        state.kopilka.entries.splice(insertAt, 0, newEntry);
       }
       recalcKopilkaBalance();
       injectKopilkaIntoPeriods();
