@@ -769,7 +769,7 @@ async function syncFromSheets() {
         if (oldPeriod) {
           oldPeriod.expenses.forEach(e => { if (!e.manual) basePaidMap[e.name] = e.paid; });
         }
-        const excludedForPeriod = (state.excludedBPs && state.excludedBPs[p.name]) || [];
+        const excludedForPeriod = (state.excludedBPs && state.excludedBPs[p.name.toLowerCase()]) || [];
         const baseExpenses = bps.map(bp => {
           // Skip if excluded for this period
           if (excludedForPeriod.includes(bp.name)) return null;
@@ -1116,9 +1116,10 @@ function deleteExp(i){
   // If base payment (not manual, not from kopilka) — record exclusion so it doesn't come back on sync
   if(!exp.manual && !exp.fromKopilka){
     if(!state.excludedBPs) state.excludedBPs = {};
-    if(!state.excludedBPs[p.name]) state.excludedBPs[p.name] = [];
-    if(!state.excludedBPs[p.name].includes(exp.name))
-      state.excludedBPs[p.name].push(exp.name);
+    const _epKey = p.name.toLowerCase();
+    if(!state.excludedBPs[_epKey]) state.excludedBPs[_epKey] = [];
+    if(!state.excludedBPs[_epKey].includes(exp.name))
+      state.excludedBPs[_epKey].push(exp.name);
   }
   p.expenses.splice(i,1);
   saveState();renderPeriod();showToast('🗑️ Удалено');
