@@ -834,7 +834,7 @@ function injectKopilkaIntoPeriods() {
     // Remove old injected kopilka entries
     p.expenses = p.expenses.filter(e => !e.fromKopilka);
     // Find matching kopilka entry for this period
-    const kEntry = state.kopilka.entries.find(e => e.typ.toLowerCase().trim() === 'в копилку' && e.period === p.name);
+    const kEntry = state.kopilka.entries.find(e => e.typ.toLowerCase().trim() === 'в копилку' && e.period.toLowerCase().trim() === p.name.toLowerCase().trim());
     if (kEntry) {
       p.expenses.unshift({
         name: 'В копилку',
