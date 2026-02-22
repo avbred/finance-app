@@ -807,6 +807,9 @@ async function syncFromSheets() {
       state.kopilka.entries = entries;
       recalcKopilkaBalance();
       injectKopilkaIntoPeriods();
+      // Debug: log what was read
+      console.log('Kopilka entries:', entries.map(e => e.period + ' | ' + e.typ + ' | ' + e.amount + ' | paid:' + e.paid));
+      console.log('Kopilka balance:', state.kopilka.balance);
     }
   }
 
@@ -818,7 +821,8 @@ function recalcKopilkaBalance() {
   let bal = 0;
   state.kopilka.entries.forEach(e => {
     if (!e.paid) return;
-    if (e.typ === 'баланс' || e.typ === 'в копилку') bal += e.amount;
+    const t = e.typ.toLowerCase().trim();
+    if (t === 'баланс' || t === 'в копилку') bal += e.amount;
     else bal -= e.amount; // 'из копилки', 'кредит'
   });
   state.kopilka.balance = bal;
@@ -830,7 +834,7 @@ function injectKopilkaIntoPeriods() {
     // Remove old injected kopilka entries
     p.expenses = p.expenses.filter(e => !e.fromKopilka);
     // Find matching kopilka entry for this period
-    const kEntry = state.kopilka.entries.find(e => e.typ === 'в копилку' && e.period === p.name);
+    const kEntry = state.kopilka.entries.find(e => e.typ.toLowerCase().trim() === 'в копилку' && e.period === p.name);
     if (kEntry) {
       p.expenses.unshift({
         name: 'В копилку',
@@ -1136,7 +1140,7 @@ function renderKopilka(showAllHistory) {
   container.innerHTML = '';
   const entries = state.kopilka.entries || [];
   // Skip 'баланс' entry in timeline display
-  const items = entries.filter(e => e.typ !== 'баланс');
+  const items = entries.filter(e => e.typ.toLowerCase().trim() !== 'баланс');
   const pastItems   = items.filter(e => e.paid);
   const futureItems = items.filter(e => !e.paid);
 
@@ -1144,7 +1148,7 @@ function renderKopilka(showAllHistory) {
   let runBal = state.kopilka.balance;
   const futureWithBal = futureItems.map(e => {
     const balBefore = runBal;
-    if (e.typ === 'в копилку') runBal += e.amount;
+    if (e.typ.toLowerCase().trim() === 'в копилку') runBal += e.amount;
     else runBal -= e.amount;
     return { ...e, balBefore, balAfter: runBal };
   });
@@ -1193,8 +1197,9 @@ function renderKopilka(showAllHistory) {
 }
 
 function makeKopEntry(e, section, balAfter, isShort) {
-  const isIncome = e.typ === 'в копилку';
-  const isCredit = e.typ === 'кредит';
+  const t_ = e.typ.toLowerCase().trim();
+  const isIncome = t_ === 'в копилку';
+  const isCredit = t_ === 'кредит';
   const el = document.createElement('div');
   el.className = 'tl-item ' + section + (isShort ? ' danger-row' : '');
 
