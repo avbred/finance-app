@@ -760,52 +760,62 @@ async function syncFromSheets() {
       const name   = row[0].trim();
       const income = parseFloat(String(row[1]).replace(/\s/g,'')) || 0;
       // Only read MANUAL expenses from Периоды sheet (not base payments)
-      const manualExpenses = [];
-      for (let c = 2; c + 1 < row.length; c += 3) {
+      const allExpenses = [];
+      // New format: 4 cols per expense (name, amount, paid, type)
+      // Old format: 3 cols per expense (name, amount, paid) - backward compat
+      let c = 2;
+      while (c < row.length) {
         const expName = (row[c] || '').trim();
         const expAmt  = parseFloat(String(row[c+1] || '').replace(/\s/g,''));
         const expPaid = (row[c+2] || '').toString().toUpperCase() === 'TRUE';
-        if (expName && !isNaN(expAmt) && expAmt > 0)
-          manualExpenses.push({ name: expName, amount: expAmt, paid: expPaid, manual: true });
+        const expType = (row[c+3] || '').trim().toLowerCase();
+        if (expName && !isNaN(expAmt) && expAmt > 0) {
+          // If type field is one of known types — new format (4 cols)
+          const knownType = expType === 'manual' || expType === 'base' || expType === 'kopilka';
+          if (knownType) {
+            allExpenses.push({ name: expName, amount: expAmt, paid: expPaid,
+              manual: expType === 'manual', fromKopilka: expType === 'kopilka' });
+            c += 4;
+          } else {
+            // Old format (3 cols)
+            allExpenses.push({ name: expName, amount: expAmt, paid: expPaid, manual: true });
+            c += 3;
+          }
+        } else { c += 3; }
       }
-      periods.push({ name, income, manualExpenses });
+      periods.push({ name, income, allExpenses });
     }
 
     if (periods.length > 0) {
-      // Build full expense list: base payments first, then manual
       periods.forEach(p => {
         const day = parseInt(p.name.match(/\d+$/)?.[0]) || 0;
         const bps = state.basePayments.filter(bp => bp.day === day);
-        // Base payments: preserve paid status if period already existed
-        const oldPeriod = state.periods.find(op => op.name === p.name);
-        const basePaidMap = {};
-        const manualPaidMap = {};
-        if (oldPeriod) {
-          oldPeriod.expenses.forEach(e => {
-            if (!e.manual && !e.fromKopilka) basePaidMap[e.name] = e.paid;
-            if (e.manual) manualPaidMap[e.name] = e.paid;
-          });
-        }
-        // Restore paid status for manual expenses from table
-        p.manualExpenses.forEach(e => {
-          if (manualPaidMap[e.name] !== undefined) e.paid = manualPaidMap[e.name];
-        });
         const excludedForPeriod = (state.excludedBPs && state.excludedBPs[p.name.toLowerCase()]) || [];
-        console.log('excludedBPs for', p.name, ':', excludedForPeriod);
-        const baseExpenses = bps.map(bp => {
-          // Skip if excluded for this period
-          if (excludedForPeriod.includes(bp.name)) return null;
-          // Check if this BP was manually overridden in the sheet for this period
-          const manualOverride = p.manualExpenses.find(e => e.name === bp.name);
-          if (manualOverride) return null;
-          return {
-            name: bp.name, amount: bp.amount,
-            paid: basePaidMap[bp.name] || false,
-            manual: false
-          };
-        }).filter(Boolean);
-        p.expenses = [...baseExpenses, ...p.manualExpenses];
-        delete p.manualExpenses;
+
+        // New format: allExpenses contains everything with types
+        if (p.allExpenses && p.allExpenses.length > 0) {
+          // Merge: use sheet data as source of truth for paid status
+          // For base expenses in sheet — use their paid status directly
+          // Add any base payments that are missing from sheet (new BPs added after period was written)
+          const sheetBaseNames = new Set(p.allExpenses.filter(e => !e.manual && !e.fromKopilka).map(e => e.name));
+          const missingBPs = bps
+            .filter(bp => !excludedForPeriod.includes(bp.name) && !sheetBaseNames.has(bp.name))
+            .map(bp => ({ name: bp.name, amount: bp.amount, paid: false, manual: false }));
+          p.expenses = [...p.allExpenses, ...missingBPs];
+          delete p.allExpenses;
+        } else {
+          // Old format or empty: reconstruct from base payments
+          const oldPeriod = state.periods.find(op => op.name === p.name);
+          const basePaidMap = {};
+          if (oldPeriod) oldPeriod.expenses.forEach(e => { if (!e.manual && !e.fromKopilka) basePaidMap[e.name] = e.paid; });
+          const baseExpenses = bps
+            .filter(bp => !excludedForPeriod.includes(bp.name))
+            .map(bp => ({ name: bp.name, amount: bp.amount, paid: basePaidMap[bp.name] || false, manual: false }));
+          const manuals = (p.manualExpenses || []);
+          p.expenses = [...baseExpenses, ...manuals];
+          delete p.manualExpenses;
+          delete p.allExpenses;
+        }
       });
 
       state.periods = periods;
@@ -940,17 +950,22 @@ async function writeBPToSheets() {
   await sheetsRequest('PUT', `${SH_BP}!A1`, { range:`${SH_BP}!A1`, majorDimension:'ROWS', values: rows });
 }
 
-// ─── Write period row: only income + manual expenses (base payments NOT stored in Периоды) ──
+// ─── Build row for a period: income + ALL expenses with type ─────────────
+function buildPeriodRow(p) {
+  const row = [p.name, p.income];
+  p.expenses.forEach(e => {
+    const type = e.fromKopilka ? 'kopilka' : (e.manual ? 'manual' : 'base');
+    row.push(e.name, e.amount, e.paid ? 'TRUE' : 'FALSE', type);
+  });
+  return row;
+}
+
+// ─── Write period row ─────────────────────────────────────────────────────
 async function writePeriodRow(periodIdx) {
   if (!gAccessToken) return;
   const p = state.periods[periodIdx];
   const sheetRow = periodIdx + 1;
-  const row = [p.name, p.income];
-  // Only write manual expenses to the sheet
-  p.expenses.filter(e => e.manual).forEach(e => {
-    row.push(e.name, e.amount, e.paid ? 'TRUE' : 'FALSE');
-  });
-  // First clear the entire row (up to col ZZ), then write fresh data
+  const row = buildPeriodRow(p);
   await sheetsRequest('CLEAR', `${SH_PERIODS}!A${sheetRow}:ZZ${sheetRow}`);
   await sheetsRequest('PUT', `${SH_PERIODS}!A${sheetRow}`, {
     range: `${SH_PERIODS}!A${sheetRow}`,
@@ -962,15 +977,9 @@ async function writePeriodRow(periodIdx) {
 // ─── Write ALL periods to sheet ──────────────────────────────────────────
 async function writeAllPeriods() {
   if (!gAccessToken) return;
-  // Clear entire sheet first
   await sheetsRequest('CLEAR', `${SH_PERIODS}!A1:ZZ500`);
-  // Write all periods one by one
   for (let i = 0; i < state.periods.length; i++) {
-    const p = state.periods[i];
-    const row = [p.name, p.income];
-    p.expenses.filter(e => e.manual).forEach(e => {
-      row.push(e.name, e.amount, e.paid ? 'TRUE' : 'FALSE');
-    });
+    const row = buildPeriodRow(state.periods[i]);
     await sheetsRequest('PUT', `${SH_PERIODS}!A${i+1}`, {
       range: `${SH_PERIODS}!A${i+1}`,
       majorDimension: 'ROWS',
