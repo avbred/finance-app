@@ -335,6 +335,10 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--ink);mi
       <div class="set-row">
         <div><div class="set-row-lbl">Мои финансы</div><div class="set-row-sub">Версия 2.1 · Google Sheets — источник правды</div></div>
       </div>
+      <div class="set-row" style="cursor:pointer" onclick="publishAllPeriods()">
+        <div><div class="set-row-lbl" style="color:var(--green)">Записать всё в таблицу</div><div class="set-row-sub">Записать все периоды из приложения в Google Sheets</div></div>
+        <span style="color:var(--green)">›</span>
+      </div>
       <div class="set-row" style="cursor:pointer" onclick="loadFromSheets()">
         <div><div class="set-row-lbl" style="color:var(--violet)">Загрузить из таблицы</div><div class="set-row-sub">Сбросить локальные данные и загрузить из Google Sheets</div></div>
         <span style="color:var(--violet)">›</span>
@@ -947,6 +951,26 @@ async function writePeriodRow(periodIdx) {
   });
 }
 
+// ─── Write ALL periods to sheet ──────────────────────────────────────────
+async function writeAllPeriods() {
+  if (!gAccessToken) return;
+  // Clear entire sheet first
+  await sheetsRequest('CLEAR', `${SH_PERIODS}!A1:ZZ500`);
+  // Write all periods one by one
+  for (let i = 0; i < state.periods.length; i++) {
+    const p = state.periods[i];
+    const row = [p.name, p.income];
+    p.expenses.filter(e => e.manual).forEach(e => {
+      row.push(e.name, e.amount, e.paid ? 'TRUE' : 'FALSE');
+    });
+    await sheetsRequest('PUT', `${SH_PERIODS}!A${i+1}`, {
+      range: `${SH_PERIODS}!A${i+1}`,
+      majorDimension: 'ROWS',
+      values: [row]
+    });
+  }
+}
+
 // ─── Debounced sync wrapper ────────────────────────────────────────────────
 let syncTimer = null;
 function scheduleSync(writeFn) {
@@ -1524,6 +1548,15 @@ function deleteBP(idx){
   if(!confirm('Удалить базовый платёж? Из существующих периодов он не удалится.'))return;
   state.basePayments.splice(idx,1);saveState();renderBPList();showToast('🗑️ Удалён');
   scheduleSync(()=>writeBPToSheets());
+}
+
+function publishAllPeriods(){
+  if(!gAccessToken){ showToast('⚠️ Сначала авторизуйся'); return; }
+  if(!confirm('Записать все периоды в Google Sheets? Данные в таблице будут перезаписаны.')) return;
+  setSyncStatus('syncing','запись...');
+  writeAllPeriods()
+    .then(()=>{ setSyncStatus('connected','синхронизировано'); showToast('✅ Все периоды записаны в таблицу!'); })
+    .catch(()=>{ setSyncStatus('error','ошибка'); showToast('❌ Ошибка записи'); });
 }
 
 function loadFromSheets(){
