@@ -412,6 +412,25 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--ink);mi
 
 <div class="toast" id="toast"></div>
 
+<!-- MODAL: Edit Kopilka Entry Amount -->
+<div class="modal-ov" id="modal-kop-edit">
+  <div class="modal">
+    <div class="modal-title">В копилку — <span id="kop-edit-period" style="color:var(--violet)"></span></div>
+    <input type="hidden" id="kop-edit-id">
+    <div class="modal-field">
+      <div class="modal-label">Сумма, ₽</div>
+      <input class="modal-input" id="kop-edit-amt" placeholder="0" type="number" inputmode="numeric">
+    </div>
+    <div style="font-size:12px;color:var(--ink-muted);margin-top:-6px;line-height:1.5">
+      Изменение обновит сумму в таблице Копилки и пересчитает прогноз баланса
+    </div>
+    <div class="modal-actions">
+      <button class="modal-btn secondary" onclick="closeModal('modal-kop-edit')">Отмена</button>
+      <button class="modal-btn primary" onclick="saveKopilkaEntryEdit()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
 <!-- Google Identity Services -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 
@@ -1092,11 +1111,44 @@ function openAddExpense(){
   setTimeout(()=>document.getElementById('exp-name-in').focus(),300);
 }
 function openEditExp(i){
-  editExpIdx=i;const e=state.periods[state.currentIdx].expenses[i];
+  const e=state.periods[state.currentIdx].expenses[i];
+  // If this is a kopilka-injected expense, open kopilka amount editor
+  if(e.fromKopilka){
+    openEditKopilkaEntry(e.kopilkaId);
+    return;
+  }
+  editExpIdx=i;
   document.getElementById('modal-exp-title').textContent='Изменить расход';
   document.getElementById('exp-name-in').value=e.name;
   document.getElementById('exp-amt-in').value=e.amount;
   openModal('modal-expense');
+}
+
+function openEditKopilkaEntry(kopilkaId){
+  const entry=(state.kopilka.entries||[]).find(e=>e.id===kopilkaId);
+  if(!entry)return;
+  document.getElementById('kop-edit-id').value=kopilkaId;
+  document.getElementById('kop-edit-amt').value=entry.amount;
+  document.getElementById('kop-edit-period').textContent=entry.period;
+  openModal('modal-kop-edit');
+  setTimeout(()=>document.getElementById('kop-edit-amt').select(),300);
+}
+
+function saveKopilkaEntryEdit(){
+  const id=document.getElementById('kop-edit-id').value;
+  const amt=parseFloat(document.getElementById('kop-edit-amt').value);
+  if(isNaN(amt)||amt<=0){showToast('⚠️ Введи сумму');return;}
+  const entry=(state.kopilka.entries||[]).find(e=>e.id===id);
+  if(!entry)return;
+  entry.amount=amt;
+  recalcKopilkaBalance();
+  injectKopilkaIntoPeriods();
+  saveState();
+  closeModal('modal-kop-edit');
+  renderPeriod();
+  document.getElementById('mk-val').textContent=fmt(state.kopilka.balance);
+  showToast('✅ Сумма обновлена!');
+  scheduleSync(()=>writeKopilkaToSheets());
 }
 function saveExpense(){
   const name=document.getElementById('exp-name-in').value.trim();
@@ -1398,6 +1450,7 @@ document.addEventListener('keydown',e=>{
     if(document.getElementById('modal-income').classList.contains('open'))saveIncome();
     if(document.getElementById('modal-kop').classList.contains('open'))saveKopOp();
     if(document.getElementById('modal-bp').classList.contains('open'))saveBP();
+    if(document.getElementById('modal-kop-edit').classList.contains('open'))saveKopilkaEntryEdit();
   }
 });
 
