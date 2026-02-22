@@ -703,15 +703,17 @@ async function syncFromSheets() {
   const bpResp = await sheetsRequest('GET', `${SH_BP}!A1:C100`);
   const bpRows = bpResp.values || [];
   if (bpRows.length > 0) {
-    const bps = bpRows.filter(r=>r[0]).map((r,i)=>({
-      id:'bp_'+i, name:r[0]||'',
-      amount:parseFloat(String(r[1]||'').replace(/\s/g,''))||0,
-      day:parseInt(r[2])||5,
-    }));
+    const bps = bpRows
+      .filter(r => r[0] && r[0] !== 'название' && r[0] !== 'name') // skip header if exists
+      .map((r,i) => ({
+        id: 'bp_'+i, name: r[0]||'',
+        amount: parseFloat(String(r[1]||'').replace(/\s/g,''))||0,
+        day: parseInt(r[2])||5,
+      }))
+      .filter(bp => bp.name && bp.amount > 0);
     if (bps.length > 0) state.basePayments = bps;
-  } else {
-    await writeBPToSheets();
   }
+  // No fallback write — table is the source of truth
 
   // --- PERIODS ---
   const perResp = await sheetsRequest('GET', `${SH_PERIODS}!A1:ZZ500`);
