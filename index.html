@@ -848,22 +848,25 @@ function recalcKopilkaBalance() {
 }
 
 function injectKopilkaIntoPeriods() {
-  // For each 'в копилку' entry, inject into matching period as a special expense
+  // First clear ALL fromKopilka entries from all periods
   state.periods.forEach(p => {
-    // Remove old injected kopilka entries
     p.expenses = p.expenses.filter(e => !e.fromKopilka);
-    // Find matching kopilka entry for this period
-    const kEntry = state.kopilka.entries.find(e => e.typ.toLowerCase().trim() === 'в копилку' && e.period.toLowerCase().trim() === p.name.toLowerCase().trim());
-    if (kEntry) {
-      p.expenses.unshift({
-        name: 'В копилку',
-        amount: kEntry.amount,
-        paid: kEntry.paid,
-        manual: false,
-        fromKopilka: true,
-        kopilkaId: kEntry.id,
-      });
-    }
+  });
+  // Then inject current kopilka entries into matching periods
+  (state.kopilka.entries || []).forEach(kEntry => {
+    if (kEntry.typ.toLowerCase().trim() !== 'в копилку') return;
+    const p = state.periods.find(p => p.name.toLowerCase().trim() === kEntry.period.toLowerCase().trim());
+    if (!p) return;
+    // Only inject once per period (skip if already injected)
+    if (p.expenses.some(e => e.fromKopilka)) return;
+    p.expenses.unshift({
+      name: 'В копилку',
+      amount: kEntry.amount,
+      paid: kEntry.paid,
+      manual: false,
+      fromKopilka: true,
+      kopilkaId: kEntry.id,
+    });
   });
 }
 
@@ -1146,9 +1149,16 @@ function saveKopilkaEntryEdit(){
   saveState();
   closeModal('modal-kop-edit');
   renderPeriod();
+  if(curTab==='kopilka')renderKopilka();
   document.getElementById('mk-val').textContent=fmt(state.kopilka.balance);
   showToast('✅ Сумма обновлена!');
-  scheduleSync(()=>writeKopilkaToSheets());
+  // Write immediately without debounce — full table rewrite
+  if(gAccessToken){
+    setSyncStatus('syncing','сохранение...');
+    writeKopilkaToSheets()
+      .then(()=>setSyncStatus('connected','синхронизировано'))
+      .catch(()=>setSyncStatus('error','ошибка записи'));
+  }
 }
 function saveExpense(){
   const name=document.getElementById('exp-name-in').value.trim();
