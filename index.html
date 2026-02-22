@@ -1234,9 +1234,7 @@ function saveExpense(){
       if(curTab==='kopilka') renderKopilka();
       if(gAccessToken){
         setSyncStatus('syncing','сохранение...');
-        // Write full table so rowIndex gets updated on next sync
         writeKopilkaToSheets()
-          .then(()=>syncFromSheets()) // re-read to get correct rowIndexes
           .then(()=>setSyncStatus('connected','синхронизировано'))
           .catch(()=>setSyncStatus('error','ошибка записи'));
       }
