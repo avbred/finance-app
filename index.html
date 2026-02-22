@@ -515,10 +515,10 @@ const INIT_KOPILKA = {
 // STATE
 // ═══════════════════════════════════════════
 function loadState(){
-  try{const s=localStorage.getItem('finance_v9');if(s)return JSON.parse(s);}catch(e){}
-  return{periods:[],kopilka:JSON.parse(JSON.stringify(INIT_KOPILKA)),basePayments:JSON.parse(JSON.stringify(INIT_BASE_PAYMENTS)),currentIdx:0,salary:150000};
+  try{const s=localStorage.getItem('finance_v10');if(s)return JSON.parse(s);}catch(e){}
+  return{periods:[],kopilka:{entries:[],balance:0},basePayments:JSON.parse(JSON.stringify(INIT_BASE_PAYMENTS)),currentIdx:0,salary:150000};
 }
-function saveState(){localStorage.setItem('finance_v9',JSON.stringify(state));}
+function saveState(){localStorage.setItem('finance_v10',JSON.stringify(state));}
 
 let state = loadState();
 let curTab = 'periods';
@@ -786,43 +786,62 @@ async function syncFromSheets() {
   }
 
   // --- KOPILKA ---
-  const kopResp = await sheetsRequest('GET', `${SH_KOPILKA}!A1:G500`);
+  // Format: период | тип | название | сумма | оплачено
+  // тип: 'баланс' | 'в копилку' | 'из копилки' | 'кредит'
+  const kopResp = await sheetsRequest('GET', `${SH_KOPILKA}!A1:E500`);
   const kopRows = kopResp.values || [];
   if (kopRows.length > 0) {
-    const timeline = kopRows
-      .filter(r => r[0] && r[2] && r[0] !== 'id' && r[2] !== 'название') // skip header
-      .map(r=>({
-        id:r[0]||'', type:r[1]||'income', name:r[2]||'',
-        amount:parseFloat(String(r[3]||'').replace(/\s/g,''))||0,
-        paid:(r[4]||'').toString().toUpperCase()==='TRUE',
-        isCredit:(r[5]||'').toString().toUpperCase()==='TRUE',
-        pastBal:r[6]?parseFloat(r[6]):undefined,
-      }));
-    if (timeline.length > 0) {
-      state.kopilka.timeline = timeline;
+    const entries = kopRows
+      .filter(r => r[0] && r[3] && r[0] !== 'период')
+      .map((r, i) => ({
+        id: 'k_' + i,
+        period: (r[0]||'').trim(),
+        typ: (r[1]||'').trim(),
+        name: (r[2]||'').trim(),
+        amount: parseFloat(String(r[3]||'').replace(/\s/g,''))||0,
+        paid: (r[4]||'').toString().toUpperCase() === 'TRUE',
+        rowIndex: i + 1,
+      }))
+      .filter(e => e.amount > 0);
+    if (entries.length > 0) {
+      state.kopilka.entries = entries;
       recalcKopilkaBalance();
+      injectKopilkaIntoPeriods();
     }
-  } else {
-    await writeKopilkaToSheets();
   }
 
   saveState();
 }
 
 function recalcKopilkaBalance() {
-  // Balance = sum of all paid incomes - sum of all paid expenses
-  // We use pastBal of the last paid item if available, else recalc
-  const paid = state.kopilka.timeline.filter(t => t.paid);
-  if (paid.length === 0) { return; }
-  const last = paid[paid.length - 1];
-  if (last.pastBal !== undefined) {
-    state.kopilka.balance = last.pastBal;
-  } else {
-    // Fallback: recalculate
-    let bal = 0;
-    paid.forEach(t => { if (t.type === 'income') bal += t.amount; else bal -= t.amount; });
-    state.kopilka.balance = bal;
-  }
+  if (!state.kopilka.entries || !state.kopilka.entries.length) return;
+  let bal = 0;
+  state.kopilka.entries.forEach(e => {
+    if (!e.paid) return;
+    if (e.typ === 'баланс' || e.typ === 'в копилку') bal += e.amount;
+    else bal -= e.amount; // 'из копилки', 'кредит'
+  });
+  state.kopilka.balance = bal;
+}
+
+function injectKopilkaIntoPeriods() {
+  // For each 'в копилку' entry, inject into matching period as a special expense
+  state.periods.forEach(p => {
+    // Remove old injected kopilka entries
+    p.expenses = p.expenses.filter(e => !e.fromKopilka);
+    // Find matching kopilka entry for this period
+    const kEntry = state.kopilka.entries.find(e => e.typ === 'в копилку' && e.period === p.name);
+    if (kEntry) {
+      p.expenses.unshift({
+        name: 'В копилку',
+        amount: kEntry.amount,
+        paid: kEntry.paid,
+        manual: false,
+        fromKopilka: true,
+        kopilkaId: kEntry.id,
+      });
+    }
+  });
 }
 
 // ═══════════════════════════════════════════
@@ -830,14 +849,26 @@ function recalcKopilkaBalance() {
 // ═══════════════════════════════════════════
 
 async function writeKopilkaToSheets() {
-  const rows = state.kopilka.timeline.map(t => [
-    t.id, t.type, t.name, t.amount,
-    t.paid ? 'TRUE' : 'FALSE',
-    t.isCredit ? 'TRUE' : 'FALSE',
-    t.pastBal !== undefined ? t.pastBal : ''
+  // Write full kopilka table (period | тип | название | сумма | оплачено)
+  const rows = state.kopilka.entries.map(e => [
+    e.period, e.typ, e.name, e.amount,
+    e.paid ? 'TRUE' : 'FALSE'
   ]);
-  await sheetsRequest('CLEAR', `${SH_KOPILKA}!A1:G500`);
-  await sheetsRequest('PUT', `${SH_KOPILKA}!A1`, { range:`${SH_KOPILKA}!A1`, majorDimension:'ROWS', values: rows });
+  await sheetsRequest('CLEAR', `${SH_KOPILKA}!A1:E500`);
+  if (rows.length > 0) {
+    await sheetsRequest('PUT', `${SH_KOPILKA}!A1`, { range:`${SH_KOPILKA}!A1`, majorDimension:'ROWS', values: rows });
+  }
+}
+
+// Write only the paid status of one entry (by rowIndex)
+async function writeKopilkaRowPaid(entry) {
+  if (!gAccessToken) return;
+  const row = entry.rowIndex;
+  await sheetsRequest('PUT', `${SH_KOPILKA}!E${row}`, {
+    range: `${SH_KOPILKA}!E${row}`,
+    majorDimension: 'ROWS',
+    values: [[entry.paid ? 'TRUE' : 'FALSE']]
+  });
 }
 
 async function writeBPToSheets() {
@@ -1016,24 +1047,20 @@ function isCurrentOrPastPeriod(idx){
 
 function toggleExp(i){
   if(!isCurrentOrPastPeriod(state.currentIdx)){showToast('⏳ Этот период ещё не наступил');return;}
-  const p=state.periods[state.currentIdx];const exp=p.expenses[i];
-  const isKop=exp.name.toLowerCase().includes('копилк');
+  const p=state.periods[state.currentIdx];
+  const exp=p.expenses[i];
   exp.paid=!exp.paid;
-  if(isKop){
-    if(exp.paid){
-      state.kopilka.balance+=exp.amount;
-      const newEntry={id:'kop_'+Date.now(),type:'income',name:'В копилку ('+p.name+')',amount:exp.amount,paid:true,isCredit:false,pastBal:state.kopilka.balance};
-      const firstUnpaidIdx=state.kopilka.timeline.findIndex(t=>!t.paid);
-      if(firstUnpaidIdx===-1)state.kopilka.timeline.push(newEntry);
-      else state.kopilka.timeline.splice(firstUnpaidIdx,0,newEntry);
-      showToast('💰 +'+fmt(exp.amount)+' в копилку!');
-    }else{
-      state.kopilka.balance-=exp.amount;
-      state.kopilka.timeline=state.kopilka.timeline.filter(t=>!(t.name==='В копилку ('+p.name+')'&&t.amount===exp.amount&&t.paid));
-      showToast('↩️ Убрано из копилки');
+
+  if(exp.fromKopilka){
+    // Sync paid status back to kopilka entry
+    const kEntry=(state.kopilka.entries||[]).find(e=>e.id===exp.kopilkaId);
+    if(kEntry){
+      kEntry.paid=exp.paid;
+      recalcKopilkaBalance();
+      document.getElementById('mk-val').textContent=fmt(state.kopilka.balance);
+      showToast(exp.paid?'💰 +'+fmt(exp.amount)+' в копилку!':'↩️ Убрано из копилки');
+      scheduleSync(()=>writeKopilkaRowPaid(kEntry));
     }
-    document.getElementById('mk-val').textContent=fmt(state.kopilka.balance);
-    scheduleSync(()=>Promise.all([writePeriodRow(state.currentIdx), writeKopilkaToSheets()]));
   }else{
     showToast(exp.paid?'✅ Оплачено!':'↩️ Не оплачено');
     scheduleSync(()=>writePeriodRow(state.currentIdx));
@@ -1103,101 +1130,168 @@ function saveIncome(){
 // ═══════════════════════════════════════════
 // KOPILKA
 // ═══════════════════════════════════════════
-function renderKopilka(showAllHistory){
-  document.getElementById('kop-balance').textContent=fmt(state.kopilka.balance);
-  const tl=state.kopilka.timeline;
-  const container=document.getElementById('kop-timeline');container.innerHTML='';
-  const pastItems=tl.filter(t=>t.paid);
-  const futureItems=tl.filter(t=>!t.paid);
-  let runBal=state.kopilka.balance;
-  const futureWithBal=futureItems.map(item=>{
-    const balBefore=runBal;
-    if(item.type==='income')runBal+=item.amount;else runBal-=item.amount;
-    return{...item,balBefore,balAfter:runBal};
+function renderKopilka(showAllHistory) {
+  document.getElementById('kop-balance').textContent = fmt(state.kopilka.balance);
+  const container = document.getElementById('kop-timeline');
+  container.innerHTML = '';
+  const entries = state.kopilka.entries || [];
+  // Skip 'баланс' entry in timeline display
+  const items = entries.filter(e => e.typ !== 'баланс');
+  const pastItems   = items.filter(e => e.paid);
+  const futureItems = items.filter(e => !e.paid);
+
+  // Running balance for future items
+  let runBal = state.kopilka.balance;
+  const futureWithBal = futureItems.map(e => {
+    const balBefore = runBal;
+    if (e.typ === 'в копилку') runBal += e.amount;
+    else runBal -= e.amount;
+    return { ...e, balBefore, balAfter: runBal };
   });
-  if(pastItems.length){
-    const HIST_LIMIT=3;const showAll=showAllHistory===true;
-    const visiblePast=showAll?pastItems:pastItems.slice(-HIST_LIMIT);
-    const hiddenCount=pastItems.length-HIST_LIMIT;
-    const hdr=document.createElement('div');hdr.className='tl-section-hdr';
-    hdr.innerHTML='История <span style="font-size:10px;opacity:.6;font-family:\'Nunito\';text-transform:none;font-weight:600;letter-spacing:0">'+pastItems.length+' операций</span>';
+
+  // HISTORY section
+  if (pastItems.length) {
+    const HIST_LIMIT = 3;
+    const showAll = showAllHistory === true;
+    const hiddenCount = Math.max(0, pastItems.length - HIST_LIMIT);
+    const visiblePast = showAll ? pastItems : pastItems.slice(-HIST_LIMIT);
+
+    const hdr = document.createElement('div');
+    hdr.className = 'tl-section-hdr';
+    hdr.innerHTML = 'История <span style="font-size:10px;opacity:.6;font-family:\'Nunito\';text-transform:none;font-weight:600;letter-spacing:0">' + pastItems.length + ' операций</span>';
     container.appendChild(hdr);
-    if(!showAll&&hiddenCount>0){
-      const btn=document.createElement('button');
-      btn.style.cssText='display:block;width:calc(100% - 48px);margin:0 24px 8px;padding:10px;background:var(--white);border:2px dashed #D8D5E8;border-radius:var(--rs);font-family:\'Nunito\',sans-serif;font-size:13px;font-weight:700;color:var(--ink-muted);cursor:pointer;';
-      btn.textContent='↑ Показать всю историю ('+hiddenCount+' скрыто)';
-      btn.onclick=()=>renderKopilka(true);container.appendChild(btn);
+
+    if (!showAll && hiddenCount > 0) {
+      const btn = document.createElement('button');
+      btn.style.cssText = 'display:block;width:calc(100% - 48px);margin:0 24px 8px;padding:10px;background:var(--white);border:2px dashed #D8D5E8;border-radius:var(--rs);font-family:\'Nunito\',sans-serif;font-size:13px;font-weight:700;color:var(--ink-muted);cursor:pointer;';
+      btn.textContent = '↑ Показать всю историю (' + hiddenCount + ' скрыто)';
+      btn.onclick = () => renderKopilka(true);
+      container.appendChild(btn);
     }
-    visiblePast.forEach(item=>container.appendChild(makeTlItem(item,'past',null,false)));
-    if(showAll&&hiddenCount>0){
-      const btn=document.createElement('button');
-      btn.style.cssText='display:block;width:calc(100% - 48px);margin:6px 24px 0;padding:10px;background:var(--white);border:2px dashed #D8D5E8;border-radius:var(--rs);font-family:\'Nunito\',sans-serif;font-size:13px;font-weight:700;color:var(--ink-muted);cursor:pointer;';
-      btn.textContent='↓ Свернуть историю';btn.onclick=()=>renderKopilka(false);container.appendChild(btn);
+    visiblePast.forEach(e => container.appendChild(makeKopEntry(e, 'past', null)));
+    if (showAll && hiddenCount > 0) {
+      const btn = document.createElement('button');
+      btn.style.cssText = 'display:block;width:calc(100% - 48px);margin:6px 24px 0;padding:10px;background:var(--white);border:2px dashed #D8D5E8;border-radius:var(--rs);font-family:\'Nunito\',sans-serif;font-size:13px;font-weight:700;color:var(--ink-muted);cursor:pointer;';
+      btn.textContent = '↓ Свернуть историю';
+      btn.onclick = () => renderKopilka(false);
+      container.appendChild(btn);
     }
   }
-  if(futureItems.length){
-    const hdr=document.createElement('div');hdr.className='tl-section-hdr';
-    hdr.style.marginTop=pastItems.length?'10px':'0';hdr.textContent='Планируется';container.appendChild(hdr);
-    futureWithBal.forEach(item=>{
-      const isShort=item.type==='expense'&&item.isCredit&&item.balBefore<item.amount;
-      container.appendChild(makeTlItem(item,'future',item.balAfter,isShort));
+
+  // PLANNED section
+  if (futureItems.length) {
+    const hdr = document.createElement('div');
+    hdr.className = 'tl-section-hdr';
+    hdr.style.marginTop = pastItems.length ? '10px' : '0';
+    hdr.textContent = 'Планируется';
+    container.appendChild(hdr);
+    futureWithBal.forEach(e => {
+      const isShort = (e.typ === 'кредит' || e.typ === 'из копилки') && e.balBefore < e.amount;
+      container.appendChild(makeKopEntry(e, 'future', e.balAfter, isShort));
     });
   }
 }
 
-function makeTlItem(item,section,balAfter,isShort){
-  const el=document.createElement('div');
-  el.className='tl-item '+section+(isShort?' danger-row':'');
-  const dotClass=`tl-dot ${item.type==='income'?'inc':'exp'} ${section}`;
-  const dotSymbol=item.type==='income'?'↑':'↓';
-  const amtClass=`tl-amt ${item.type==='income'?'inc':'exp'} ${section}`;
-  const amtSign=item.type==='income'?'+':'−';
-  let balHtml='';
-  if(section==='past'&&item.pastBal!==undefined)balHtml=`<div class="tl-bal ok" style="color:#aaa">→ ${fmt(item.pastBal)}</div>`;
-  else if(section==='future'&&balAfter!==null){const balOk=balAfter>=0;const shortage=balOk?'':' ('+fmt(Math.abs(balAfter))+' не хватает)';balHtml=`<div class="tl-bal ${balOk?'ok':'warn'}">→ ${fmt(balAfter)}${shortage}</div>`;}
-  let rightHtml='';
-  if(item.isCredit&&section==='future'){
-    rightHtml=`<div class="tl-right-col"><div class="${amtClass}">${amtSign}${fmt(item.amount)}</div></div>${isShort?'<div class="tl-warn-icon" title="Не хватает денег">⚠️</div>':''}<button class="tl-check unpaid" onclick="toggleTlItem('${item.id}')">○</button>`;
-  }else if(item.isCredit&&section==='past'){
-    rightHtml=`<div class="${amtClass}">${amtSign}${fmt(item.amount)}</div><div class="tl-check paid" style="cursor:default;pointer-events:none">✓</div>`;
-  }else{rightHtml=`<div class="${amtClass}">${amtSign}${fmt(item.amount)}</div>`;}
-  el.innerHTML=`<div class="${dotClass}">${dotSymbol}</div><div class="tl-info"><div class="tl-name">${item.name}</div>${balHtml}</div><div class="tl-right">${rightHtml}</div>`;
+function makeKopEntry(e, section, balAfter, isShort) {
+  const isIncome = e.typ === 'в копилку';
+  const isCredit = e.typ === 'кредит';
+  const el = document.createElement('div');
+  el.className = 'tl-item ' + section + (isShort ? ' danger-row' : '');
+
+  const dotClass = 'tl-dot ' + (isIncome ? 'inc' : 'exp') + ' ' + section;
+  const amtClass = 'tl-amt ' + (isIncome ? 'inc' : 'exp') + ' ' + section;
+  const sign = isIncome ? '+' : '−';
+  const symbol = isIncome ? '↑' : '↓';
+
+  // Balance hint
+  let balHtml = '';
+  if (section === 'past') {
+    // Compute running balance up to this entry from entries array
+    let bal = 0;
+    for (const en of (state.kopilka.entries || [])) {
+      if (en.typ === 'баланс') { bal = en.amount; }
+      else if (en.typ === 'в копилку') bal += en.amount;
+      else bal -= en.amount;
+      if (en.id === e.id) break;
+    }
+    balHtml = `<div class="tl-bal ok" style="color:#aaa">→ ${fmt(bal)}</div>`;
+  } else if (balAfter !== null && balAfter !== undefined) {
+    const ok = balAfter >= 0;
+    const short = ok ? '' : ' (' + fmt(Math.abs(balAfter)) + ' не хватает)';
+    balHtml = `<div class="tl-bal ${ok ? 'ok' : 'warn'}">→ ${fmt(balAfter)}${short}</div>`;
+  }
+
+  // Right side
+  let rightHtml = '';
+  if (isCredit && section === 'future') {
+    rightHtml = `<div class="tl-right-col"><div class="${amtClass}">${sign}${fmt(e.amount)}</div></div>` +
+      (isShort ? '<div class="tl-warn-icon">⚠️</div>' : '') +
+      `<button class="tl-check unpaid" onclick="toggleKopEntry('${e.id}')">○</button>`;
+  } else if (isCredit && section === 'past') {
+    rightHtml = `<div class="${amtClass}">${sign}${fmt(e.amount)}</div><div class="tl-check paid" style="cursor:default;pointer-events:none">✓</div>`;
+  } else if (!isIncome && section === 'future') {
+    // 'из копилки' — also toggleable
+    rightHtml = `<div class="tl-right-col"><div class="${amtClass}">${sign}${fmt(e.amount)}</div></div>` +
+      (isShort ? '<div class="tl-warn-icon">⚠️</div>' : '') +
+      `<button class="tl-check unpaid" onclick="toggleKopEntry('${e.id}')">○</button>`;
+  } else {
+    rightHtml = `<div class="${amtClass}">${sign}${fmt(e.amount)}</div>`;
+  }
+
+  el.innerHTML = `<div class="${dotClass}">${symbol}</div><div class="tl-info"><div class="tl-name">${e.name}</div>${balHtml}</div><div class="tl-right">${rightHtml}</div>`;
   return el;
 }
 
-function toggleTlItem(id){
-  const item=state.kopilka.timeline.find(t=>t.id===id);
-  if(!item||!item.isCredit)return;
-  item.paid=!item.paid;
-  if(item.paid){state.kopilka.balance-=item.amount;showToast('💸 '+fmt(item.amount)+' снято — кредит оплачен');}
-  else{state.kopilka.balance+=item.amount;showToast('↩️ Платёж отменён — возвращено в копилку');}
-  saveState();renderKopilka();
-  document.getElementById('mk-val').textContent=fmt(state.kopilka.balance);
-  scheduleSync(()=>writeKopilkaToSheets());
+function toggleKopEntry(id) {
+  const e = (state.kopilka.entries || []).find(x => x.id === id);
+  if (!e) return;
+  e.paid = !e.paid;
+  recalcKopilkaBalance();
+  injectKopilkaIntoPeriods();
+  saveState();
+  renderKopilka();
+  renderPeriod();
+  document.getElementById('mk-val').textContent = fmt(state.kopilka.balance);
+  showToast(e.paid ? '✅ Отмечено оплаченным' : '↩️ Отменено');
+  scheduleSync(() => writeKopilkaRowPaid(e));
 }
 
-function openKopilkaOp(type){
-  kopOpType=type;
-  document.getElementById('modal-kop-title').textContent=type==='add'?'+ Пополнить копилку':'− Снять из копилки';
-  document.getElementById('kop-amt-in').value='';document.getElementById('kop-comment-in').value='';
-  openModal('modal-kop');setTimeout(()=>document.getElementById('kop-amt-in').focus(),300);
+function openKopilkaOp(type) {
+  kopOpType = type;
+  document.getElementById('modal-kop-title').textContent = type === 'add' ? '+ Пополнить копилку' : '− Снять из копилки';
+  document.getElementById('kop-amt-in').value = '';
+  document.getElementById('kop-comment-in').value = '';
+  openModal('modal-kop');
+  setTimeout(() => document.getElementById('kop-amt-in').focus(), 300);
 }
-function saveKopOp(){
-  const a=parseFloat(document.getElementById('kop-amt-in').value);
-  const c=document.getElementById('kop-comment-in').value.trim()||(kopOpType==='add'?'Пополнение':'Снятие');
-  if(isNaN(a)||a<=0){showToast('⚠️ Введи сумму');return;}
-  const isAdd=kopOpType==='add';
-  const newId='manual_'+Date.now();
-  const newItem={id:newId,type:isAdd?'income':'expense',name:c,amount:a,paid:true,isCredit:false};
-  const firstUnpaidIdx=state.kopilka.timeline.findIndex(t=>!t.paid);
-  if(firstUnpaidIdx===-1)state.kopilka.timeline.push(newItem);
-  else state.kopilka.timeline.splice(firstUnpaidIdx,0,newItem);
-  if(isAdd)state.kopilka.balance+=a;else state.kopilka.balance-=a;
-  newItem.pastBal=state.kopilka.balance;
-  saveState();closeModal('modal-kop');renderKopilka();
-  document.getElementById('mk-val').textContent=fmt(state.kopilka.balance);
-  showToast(isAdd?'💰 Добавлено в копилку!':'💸 Снято из копилки!');
-  scheduleSync(()=>writeKopilkaToSheets());
+
+function saveKopOp() {
+  const a = parseFloat(document.getElementById('kop-amt-in').value);
+  const c = document.getElementById('kop-comment-in').value.trim() || (kopOpType === 'add' ? 'Пополнение' : 'Снятие');
+  if (isNaN(a) || a <= 0) { showToast('⚠️ Введи сумму'); return; }
+  const isAdd = kopOpType === 'add';
+  const entries = state.kopilka.entries || [];
+  const firstUnpaidIdx = entries.findIndex(e => !e.paid);
+  const newEntry = {
+    id: 'manual_' + Date.now(),
+    period: 'вручную',
+    typ: isAdd ? 'в копилку' : 'из копилки',
+    name: c,
+    amount: a,
+    paid: true,
+    rowIndex: 0,
+  };
+  if (firstUnpaidIdx === -1) entries.push(newEntry);
+  else entries.splice(firstUnpaidIdx, 0, newEntry);
+  state.kopilka.entries = entries;
+  recalcKopilkaBalance();
+  injectKopilkaIntoPeriods();
+  saveState();
+  closeModal('modal-kop');
+  renderKopilka();
+  document.getElementById('mk-val').textContent = fmt(state.kopilka.balance);
+  showToast(isAdd ? '💰 Добавлено в копилку!' : '💸 Снято из копилки!');
+  scheduleSync(() => writeKopilkaToSheets());
 }
 
 // ═══════════════════════════════════════════
@@ -1284,7 +1378,7 @@ function deleteBP(idx){
 
 function resetData(){
   if(!confirm('Сбросить все данные к начальным? Это нельзя отменить.'))return;
-  localStorage.removeItem('finance_v9');
+  localStorage.removeItem('finance_v10');
   state=loadState();saveState();renderPeriod();showToast('🔄 Данные сброшены');
 }
 
