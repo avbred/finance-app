@@ -701,6 +701,8 @@ function saveState(){localStorage.setItem('finance_v10',JSON.stringify(state));}
 
 let state = loadState();
 let curTab = 'periods';
+var dtCurrentTab = 'periods';
+function isDesktop() { return window.innerWidth >= 900; }
 let editExpIdx = null;
 let kopOpType = 'add';
 let editBPIdx = null;
@@ -1822,9 +1824,7 @@ init();
 // DESKTOP LAYOUT JS
 // ═══════════════════════════════════════════
 
-let dtCurrentTab = 'periods';
-
-function isDesktop() { return window.innerWidth >= 900; }
+// dtCurrentTab and isDesktop declared above with main state
 
 function dtSwitchTab(tab) {
   dtCurrentTab = tab;
