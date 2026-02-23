@@ -574,13 +574,50 @@ function setSyncStatus(status, label) {
   lbl.textContent = label;
 }
 
+function saveToken(token, email) {
+  localStorage.setItem('gauth_v2', JSON.stringify({
+    token, email, savedAt: Date.now()
+  }));
+}
+
+function loadSavedToken() {
+  try {
+    const d = JSON.parse(localStorage.getItem('gauth_v2') || '{}');
+    if (!d.token || !d.savedAt) return null;
+    const age = (Date.now() - d.savedAt) / 1000 / 60; // minutes
+    if (age > 50) return null; // expired
+    return d;
+  } catch(e) { return null; }
+}
+
+async function onTokenReady(token) {
+  gAccessToken = token;
+  setSyncStatus('syncing','синхронизация...');
+  try {
+    await initSheets();
+    await syncFromSheets();
+    setSyncStatus('connected','синхронизировано');
+    renderPeriod();
+    renderKopilka();
+  } catch(e) {
+    setSyncStatus('error','ошибка');
+    showToast('❌ ' + (e.message || 'Ошибка синхронизации'));
+  }
+  renderSettings();
+}
+
 function initGoogleAuth() {
-  // Restore token from localStorage if available
-  const saved = localStorage.getItem('gauth_v2');
+  // Try to restore saved token first (< 50 min old)
+  const saved = loadSavedToken();
   if (saved) {
+    gUserEmail = saved.email;
+    setSyncStatus('syncing','восстановление...');
+    onTokenReady(saved.token);
+  } else {
+    // Try to get email for silent refresh hint
     try {
-      const d = JSON.parse(saved);
-      if (d.email) { gUserEmail = d.email; }
+      const d = JSON.parse(localStorage.getItem('gauth_v2') || '{}');
+      if (d.email) gUserEmail = d.email;
     } catch(e) {}
   }
 
@@ -594,42 +631,29 @@ function initGoogleAuth() {
       scope: SCOPES,
       callback: async (resp) => {
         if (resp.error) { setSyncStatus('error','ошибка'); showToast('❌ Ошибка авторизации'); return; }
-        gAccessToken = resp.access_token;
-        // Save email for silent refresh on next load
-        if (resp.access_token) {
-          // Fetch user info to get email
+        // Fetch email if not known
+        if (!gUserEmail) {
           fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-            headers: { Authorization: `Bearer ${gAccessToken}` }
+            headers: { Authorization: `Bearer ${resp.access_token}` }
           }).then(r=>r.json()).then(info => {
-            if (info.email) {
-              gUserEmail = info.email;
-              localStorage.setItem('gauth_v2', JSON.stringify({ email: info.email }));
-              renderAuthCard();
-            }
-          }).catch(()=>{});
+            if (info.email) { gUserEmail = info.email; renderAuthCard(); }
+            saveToken(resp.access_token, gUserEmail || '');
+          }).catch(()=>{ saveToken(resp.access_token, gUserEmail || ''); });
+        } else {
+          saveToken(resp.access_token, gUserEmail);
         }
-        setSyncStatus('syncing','синхронизация...');
-        try {
-          await initSheets();
-          await syncFromSheets();
-          setSyncStatus('connected','синхронизировано');
-          renderPeriod();
-          renderKopilka();
-        } catch(e) {
-          setSyncStatus('error','ошибка');
-          showToast('❌ ' + (e.message || 'Ошибка синхронизации'));
-        }
-        renderSettings();
+        await onTokenReady(resp.access_token);
       }
     });
 
-    // Auto-try silent token refresh if we had email before
+    // If token was already restored — no need for silent refresh
+    if (gAccessToken) return;
+
+    // Try silent refresh if we know the email
     if (gUserEmail) {
       setSyncStatus('syncing','восстановление...');
-      // Use 'select_account' only if no email, otherwise skip account chooser
       tokenClient.requestAccessToken({ prompt: 'none', login_hint: gUserEmail,
         error_callback: () => {
-          // Silent failed — need user interaction, show badge as offline
           setSyncStatus('offline','офлайн');
           renderAuthCard();
         }
