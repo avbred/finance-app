@@ -368,7 +368,7 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--ink);mi
         </div>
         <span style="font-size:20px">💸</span>
       </div>
-      <div class="sync-badge offline" id="sync-badge-dt" onclick="manualSync()" style="width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;cursor:pointer;" title="Синхронизация">
+      <div id="sync-badge-dt" onclick="gAccessToken ? manualSync() : signIn()" style="width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;cursor:pointer;" title="Нажми для авторизации">
         <span id="sync-label-dt" style="font-size:18px">🤫</span>
       </div>
     </div>
