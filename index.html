@@ -714,9 +714,19 @@ let isSyncing    = false;
 function setSyncStatus(status, label) {
   const badge = document.getElementById('sync-badge');
   const lbl   = document.getElementById('sync-label');
-  badge.className = 'sync-badge ' + status;
+  if (badge) { badge.className = 'sync-badge ' + status; }
   const emoji = status === 'connected' ? '🙂' : status === 'syncing' ? '👀' : '🤫';
-  lbl.textContent = emoji;
+  if (lbl) lbl.textContent = emoji;
+  // Desktop badge
+  const lblDt = document.getElementById('sync-label-dt');
+  if (lblDt) lblDt.textContent = emoji;
+  // Refresh desktop grid when connected
+  if (status === 'connected' && typeof isDesktop === 'function' && isDesktop()) {
+    if (typeof dtCurrentTab !== 'undefined') {
+      if (dtCurrentTab === 'periods') setTimeout(renderDtGrid, 0);
+      renderDtKopilkaBalance();
+    }
+  }
 }
 
 function saveToken(token, email) {
@@ -1262,6 +1272,7 @@ function renderPeriod(){
   fill.className='prog-fill'+(pct>=100?' warn':pct>=70?' warn':'');
   document.getElementById('btn-prev').disabled=state.currentIdx===0;
   document.getElementById('btn-next').disabled=state.currentIdx===state.periods.length-1;
+  if (typeof isDesktop==='function' && isDesktop() && typeof dtCurrentTab!=='undefined' && dtCurrentTab==='periods') setTimeout(renderDtGrid,0);
   document.getElementById('mk-val').textContent=fmt(state.kopilka.balance);
 
   const isFuture=!isCurrentOrPastPeriod(state.currentIdx);
@@ -1491,6 +1502,10 @@ function saveIncome(){
 // KOPILKA
 // ═══════════════════════════════════════════
 function renderKopilka(showAllHistory) {
+  // Desktop hook
+  if (typeof isDesktop === 'function' && isDesktop()) {
+    setTimeout(() => { renderDtKopilkaBalance(); if (typeof dtCurrentTab !== 'undefined' && dtCurrentTab === 'kopilka') renderDtKopilka(); }, 0);
+  }
   document.getElementById('kop-balance').textContent = fmt(state.kopilka.balance);
   const container = document.getElementById('kop-timeline');
   container.innerHTML = '';
@@ -1999,30 +2014,7 @@ function renderDtSettings() {
   }
 }
 
-// Override setSyncStatus to also update desktop badge
-const _origSetSyncStatus = setSyncStatus;
-function setSyncStatus(status, label) {
-  _origSetSyncStatus(status, label);
-  setSyncStatusDt(status);
-  if (status === 'connected' && isDesktop() && dtCurrentTab === 'periods') {
-    renderDtGrid();
-    renderDtKopilkaBalance();
-  }
-}
-
-// Override renderPeriod/renderKopilka to also update desktop when active
-const _origRenderPeriod = renderPeriod;
-function renderPeriod() {
-  _origRenderPeriod();
-  if (isDesktop() && dtCurrentTab === 'periods') renderDtGrid();
-}
-
-const _origRenderKopilka = renderKopilka;
-function renderKopilka(showAll) {
-  _origRenderKopilka(showAll);
-  renderDtKopilkaBalance();
-  if (isDesktop() && dtCurrentTab === 'kopilka') renderDtKopilka();
-}
+// Desktop sync hooks — handled inside original functions
 
 // Init desktop on load
 window.addEventListener('resize', () => {
