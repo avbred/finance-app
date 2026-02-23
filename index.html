@@ -798,8 +798,9 @@ async function syncFromSheets() {
           // For base expenses in sheet — use their paid status directly
           // Add any base payments that are missing from sheet (new BPs added after period was written)
           const sheetBaseNames = new Set(p.allExpenses.filter(e => !e.manual && !e.fromKopilka).map(e => e.name));
+          const sheetManualNames = new Set(p.allExpenses.filter(e => e.manual).map(e => e.name));
           const missingBPs = bps
-            .filter(bp => !excludedForPeriod.includes(bp.name) && !sheetBaseNames.has(bp.name))
+            .filter(bp => !excludedForPeriod.includes(bp.name) && !sheetBaseNames.has(bp.name) && !sheetManualNames.has(bp.name))
             .map(bp => ({ name: bp.name, amount: bp.amount, paid: false, manual: false }));
           p.expenses = [...p.allExpenses, ...missingBPs];
           delete p.allExpenses;
