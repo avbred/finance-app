@@ -29,21 +29,19 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--ink);mi
 .screen.active{display:flex}
 
 /* TOPBAR */
-.topbar{padding:52px 24px 16px;background:var(--cream);position:sticky;top:0;z-index:10;display:flex;align-items:flex-start;justify-content:space-between}
+.topbar{padding:20px 24px 12px;background:var(--cream);position:sticky;top:0;z-index:10;display:flex;align-items:flex-start;justify-content:space-between}
 .topbar-title{font-family:'Unbounded',sans-serif;font-size:22px;font-weight:800;letter-spacing:-.5px}
 .topbar-right{display:flex;gap:8px;align-items:center;margin-top:4px}
 .icon-btn{width:40px;height:40px;background:var(--white);border:none;border-radius:12px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow);transition:transform .1s}
 .icon-btn:active{transform:scale(.92)}
 
 /* SYNC STATUS */
-.sync-badge{display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;transition:all .2s}
-.sync-badge.connected{background:var(--green-light);color:var(--green)}
-.sync-badge.syncing{background:var(--yellow-light);color:#B8860B}
-.sync-badge.error{background:var(--coral-light);color:var(--coral)}
-.sync-badge.offline{background:#F0EEF8;color:var(--ink-muted)}
-.sync-dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+.sync-badge{display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:12px;cursor:pointer;transition:all .2s;box-shadow:var(--shadow)}
+.sync-badge.connected{background:var(--white)}
+.sync-badge.syncing{background:var(--white)}
+.sync-badge.error{background:var(--coral-light)}
+.sync-badge.offline{background:var(--white)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-.sync-badge.syncing .sync-dot{animation:pulse .8s infinite}
 
 /* MINI KOPILKA */
 .mini-kopilka{margin:0 24px 16px;background:var(--violet-light);border-radius:var(--r);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;transition:transform .15s}
@@ -247,18 +245,16 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--ink);mi
 <!-- PERIODS -->
 <div class="screen active" id="screen-periods">
   <div class="topbar">
-    <div class="topbar-title">Мои финансы ✦</div>
+    <div class="topbar-title">Мои финансы ✨</div>
     <div class="topbar-right">
       <div class="sync-badge offline" id="sync-badge" onclick="manualSync()" title="Синхронизация">
-        <div class="sync-dot"></div>
-        <span id="sync-label">офлайн</span>
+        <span id="sync-label" style="font-size:18px">🤫</span>
       </div>
-      <button class="icon-btn" onclick="switchTab('settings')">⚙️</button>
     </div>
   </div>
   <div class="mini-kopilka" onclick="switchTab('kopilka')">
     <div class="mk-left">
-      <div class="mk-icon">🏦</div>
+      <div class="mk-icon">💸</div>
       <div><div class="mk-label">Копилка</div><div class="mk-val" id="mk-val">0 ₽</div></div>
     </div>
     <div class="mk-arrow">›</div>
@@ -297,8 +293,7 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--ink);mi
 <!-- KOPILKA -->
 <div class="screen" id="screen-kopilka">
   <div class="topbar">
-    <div class="topbar-title">Копилка 🏦</div>
-    <button class="icon-btn" onclick="switchTab('settings')">⚙️</button>
+    <div class="topbar-title">Копилка 💸</div>
   </div>
   <div class="kop-hero">
     <div class="kop-hero-lbl">Баланс копилки</div>
@@ -571,7 +566,8 @@ function setSyncStatus(status, label) {
   const badge = document.getElementById('sync-badge');
   const lbl   = document.getElementById('sync-label');
   badge.className = 'sync-badge ' + status;
-  lbl.textContent = label;
+  const emoji = status === 'connected' ? '🙂' : status === 'syncing' ? '👀' : '🤫';
+  lbl.textContent = emoji;
 }
 
 function saveToken(token, email) {
@@ -1114,7 +1110,7 @@ function renderPeriod(){
   document.getElementById('prog-pct').textContent=pct+'%';
   const fill=document.getElementById('prog-fill');
   fill.style.width=Math.min(pct,100)+'%';
-  fill.className='prog-fill'+(pct>=100?' danger':pct>=70?' warn':'');
+  fill.className='prog-fill'+(pct>=100?' warn':pct>=70?' warn':'');
   document.getElementById('btn-prev').disabled=state.currentIdx===0;
   document.getElementById('btn-next').disabled=state.currentIdx===state.periods.length-1;
   document.getElementById('mk-val').textContent=fmt(state.kopilka.balance);
