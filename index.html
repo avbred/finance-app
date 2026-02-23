@@ -351,6 +351,9 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--ink);mi
   <div class="loading-txt" id="loading-txt">Загрузка...</div>
 </div>
 
+<!-- Hidden auth trigger (always in DOM for GSI compatibility) -->
+<button id="hidden-signin-btn" onclick="signIn()" style="position:fixed;opacity:0;pointer-events:none;width:1px;height:1px;top:0;left:0"></button>
+
 <!-- DESKTOP SHELL -->
 <div id="desktop-shell">
   <div id="desktop-topbar">
@@ -368,7 +371,7 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--ink);mi
         </div>
         <span style="font-size:20px">💸</span>
       </div>
-      <div id="sync-badge-dt" onclick="gAccessToken ? manualSync() : signIn()" style="width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;cursor:pointer;" title="Нажми для авторизации">
+      <div id="sync-badge-dt" onclick="gAccessToken ? manualSync() : document.getElementById('hidden-signin-btn').click()" style="width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;cursor:pointer;" title="Нажми для авторизации">
         <span id="sync-label-dt" style="font-size:18px">🤫</span>
       </div>
     </div>
